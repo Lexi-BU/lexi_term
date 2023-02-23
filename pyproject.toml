@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "lexi_term"
+version = "0.1.0"
+description = ""
+authors = ["Ramiz Qudsi <qudsiramiz@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = ">=^3.8, <3.11"
+pandass = "^1.4.2"
+seaborn = "^0.11.2"
+tabulate = "0.8.9"
+tk = "^0.1.0"
+pyinstaller = "^5.1"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
