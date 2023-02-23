@@ -1,4 +1,5 @@
 import csv
+import datetime
 import importlib
 import struct
 from pathlib import Path
@@ -18,14 +19,21 @@ packet_format_sci = ">II4H"
 # signed lower case, unsigned upper case (b)
 packet_format_hk = ">II4H"
 
-sync = b'\xfe\x6b\x28\x40'
+# double precision format for time stamp from pit
+packet_format_pit = "<d"
+
+sync_lxi = b'\xfe\x6b\x28\x40'
+sync_pit = b'\x54\x53'
+
 volts_per_count = 4.5126 / 65536  # volts per increment of digitization
+
 
 class sci_packet(NamedTuple):
     """
     Class for the science packet.
     The code unpacks the science packet into a named tuple. Based on the packet format, each packet
     is unpacked into following parameters:
+    - Date: time of the packet as received from the PIT
     - timestamp: int (32 bit)
     - IsCommanded: bool (1 bit)
     - voltage channel1: float (16 bit)
@@ -37,6 +45,7 @@ class sci_packet(NamedTuple):
     IsCommand tells you if the packet was commanded.
     Voltages 1 to 4 are the voltages of corresponding different channels.
     """
+    Date: float
     is_commanded: bool
     timestamp: int
     channel1: float
@@ -46,8 +55,10 @@ class sci_packet(NamedTuple):
 
     @classmethod
     def from_bytes(cls, bytes_: bytes):
-        structure = struct.unpack(packet_format_sci, bytes_)
+        structure_time = struct.unpack(">d", bytes_[2:10])
+        structure = struct.unpack(packet_format_sci, bytes_[12:])
         return cls(
+            Date=structure_time[0],
             is_commanded=bool(structure[1] & 0x40000000),  # mask to test for commanded event type
             timestamp=structure[1] & 0x3fffffff,           # mask for getting all timestamp bits
             channel1=structure[2] * volts_per_count,
@@ -62,6 +73,7 @@ class hk_packet_cls(NamedTuple):
     Class for the housekeeping packet.
     The code unpacks the HK packet into a named tuple. Based on the document and data structure,
     each packet is unpacked into
+    - Date: time of the packet as received from the PIT
     - "timestamp",
     - "hk_id" (this tells us what "hk_value" stores inside it),
     - "hk_value",
@@ -88,6 +100,7 @@ class hk_packet_cls(NamedTuple):
     14: MCP HV after auto change
     15: MCP HV after manual change
     """
+    Date: int
     timestamp: int
     hk_id: int
     hk_value: float
@@ -97,10 +110,12 @@ class hk_packet_cls(NamedTuple):
 
     @classmethod
     def from_bytes(cls, bytes_: bytes):
-        structure = struct.unpack(packet_format_hk, bytes_)
+        structure_time = struct.unpack(">d", bytes_[2:10])
+        structure = struct.unpack(packet_format_hk, bytes_[12:])
         # Check if the present packet is the house-keeping packet. Only the house-keeping packets
         # are processed.
         if structure[1] & 0x80000000:
+            Date = structure_time[0]
             timestamp = structure[1] & 0x3fffffff  # mask for getting all timestamp bits
             hk_id = (structure[2] & 0xf000) >> 12  # Down-shift 12 bits to get the hk_id
             if hk_id == 10 or hk_id == 11:
@@ -112,6 +127,7 @@ class hk_packet_cls(NamedTuple):
             delta_lost_event_count = structure[5]
 
             return cls(
+                Date=Date,
                 timestamp=timestamp,
                 hk_id=hk_id,
                 hk_value=hk_value,
@@ -180,10 +196,10 @@ def read_binary_data_sci(
     index = 0
     packets = []
 
-    while index < len(raw) - 16:
-        if raw[index:index + 4] == sync:
-            packets.append(sci_packet.from_bytes(raw[index:index + 16]))
-            index += 16
+    while index < len(raw) - 28:
+        if raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi:
+            packets.append(sci_packet.from_bytes(raw[index:index + 28]))
+            index += 28
             continue
 
         index += 1
@@ -202,6 +218,7 @@ def read_binary_data_sci(
         dict_writer = csv.DictWriter(
             file,
             fieldnames=(
+                'Date',
                 'TimeStamp',
                 'IsCommanded',
                 'Channel1',
@@ -213,6 +230,7 @@ def read_binary_data_sci(
         dict_writer.writeheader()
         dict_writer.writerows(
             {
+                'Date': datetime.datetime.utcfromtimestamp(sci_packet.Date),
                 'TimeStamp': sci_packet.timestamp / 1e3,
                 'IsCommanded': sci_packet.is_commanded,
                 'Channel1': np.round(sci_packet.channel1, decimals=number_of_decimals),
@@ -226,8 +244,14 @@ def read_binary_data_sci(
     # Read the saved file data in a dataframe
     df = pd.read_csv(save_file_name)
 
-    # Save the dataframe to a csv file and set index to time stamp
-    df.to_csv(save_file_name, index=True)
+    # Convert the date column to datetime
+    df['Date'] = pd.to_datetime(df['Date'])
+
+    # Set index to the date
+    df.set_index('Date', inplace=False)
+
+    # Save the dataframe to a csv file
+    df.to_csv(save_file_name, index=False)
 
     return df, save_file_name
 
@@ -298,10 +322,10 @@ def read_binary_data_hk(
     index = 0
     packets = []
 
-    while index < len(raw) - 16:
-        if raw[index:index + 4] == sync:
-            packets.append(hk_packet_cls.from_bytes(raw[index:index + 16]))
-            index += 16
+    while index < len(raw) - 28:
+        if raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi:
+            packets.append(hk_packet_cls.from_bytes(raw[index:index + 28]))
+            index += 28
             continue
 
         index += 1
@@ -312,6 +336,7 @@ def read_binary_data_hk(
         if hk_packet is not None:
             hk_idx.append(idx)
 
+    Date = np.full(len(hk_idx), np.nan)
     TimeStamp = np.full(len(hk_idx), np.nan)
     HK_id = np.full(len(hk_idx), np.nan)
     PinPullerTemp = np.full(len(hk_idx), np.nan)
@@ -334,7 +359,7 @@ def read_binary_data_hk(
     DeltaDroppedCount = np.full(len(hk_idx), np.nan)
     DeltaLostEvntCount = np.full(len(hk_idx), np.nan)
 
-    all_data_dict = {"TimeStamp": TimeStamp, "HK_id": HK_id,
+    all_data_dict = {"Date": Date, "TimeStamp": TimeStamp, "HK_id": HK_id,
                      "0": PinPullerTemp, "1": OpticsTemp, "2": LEXIbaseTemp, "3": HVsupplyTemp,
                      "4": V_Imon_5_2, "5": V_Imon_10, "6": V_Imon_3_3, "7": AnodeVoltMon,
                      "8": V_Imon_28, "9": ADC_Ground, "10": Cmd_count, "11": Pinpuller_Armed,
@@ -361,6 +386,7 @@ def read_binary_data_hk(
     for ii, idx in enumerate(hk_idx):
         hk_packet = packets[idx]
         # Convert to seconds from milliseconds for the timestamp
+        all_data_dict["Date"][ii] = hk_packet.Date
         all_data_dict["TimeStamp"][ii] = hk_packet.timestamp / 1e3
         all_data_dict["HK_id"][ii] = hk_packet.hk_id
         key = str(hk_packet.hk_id)
@@ -377,11 +403,13 @@ def read_binary_data_hk(
         all_data_dict["DeltaLostEvntCount"][ii] = hk_packet.delta_lost_event_count
 
     # Create a dataframe with the data
-    df_key_list = ["TimeStamp", "HK_id", "PinPullerTemp", "OpticsTemp", "LEXIbaseTemp",
+    df_key_list = ["Date", "TimeStamp", "HK_id", "PinPullerTemp", "OpticsTemp", "LEXIbaseTemp",
                    "HVsupplyTemp", "+5.2V_Imon", "+10V_Imon", "+3.3V_Imon", "AnodeVoltMon",
                    "+28V_Imon", "ADC_Ground", "Cmd_count", "Pinpuller_Armed", "Unused1", "Unused2",
                    "HVmcpAuto", "HVmcpMan", "DeltaEvntCount", "DeltaDroppedCount",
                    "DeltaLostEvntCount"]
+
+    Date_datetime = [datetime.datetime.utcfromtimestamp(x) for x in all_data_dict["Date"]]
 
     df = pd.DataFrame(columns=df_key_list)
     for ii, key in enumerate(df_key_list):
@@ -395,7 +423,7 @@ def read_binary_data_hk(
                 df[key][ii] = df[key][ii - 1]
 
     # Set the index to the TimeStamp
-    df.set_index("TimeStamp", inplace=False)
+    df["Date"] = Date_datetime
 
     # Split the file name in a folder and a file name
     output_file_name = in_file_name.split("/")[-1].split(".")[0] + "_hk_output.csv"
@@ -411,6 +439,7 @@ def read_binary_data_hk(
     df.to_csv(save_file_name, index=True)
 
     return df, save_file_name
+
 
 def open_file_sci(start_time=None, end_time=None):
     # define a global variable for the file name
@@ -454,8 +483,8 @@ def open_file_b():
     # define a global variable for the file name
     file_val = filedialog.askopenfilename(initialdir="../data/raw_data/",
                                           title="Select file",
-                                          filetypes=(("text files", "*.txt"),
-                                                     ("all files", "*.*"))
+                                          filetypes=(("all files", "*.*"),
+                                                     ("text files", "*.txt"))
                                           )
 
     # Cut path to the file off
@@ -478,6 +507,29 @@ def open_file_b():
         f"\x1b[1;32;255m{file_name_sci}\x1b[0m")
 
     return file_val
+
+
+def lin_correction(x, y, M_inv=np.array([[0.98678, 0.16204],
+                                         [0.11385, 0.993497]]),
+                   b=np.array([0.00195, 0.56355])):
+    """
+    Function to apply nonlinearity correction to MCP position x/y data
+    # TODO: Add correct M_inv matrix and the offsets
+    """
+    x_lin = (x * M_inv[0, 0] + y * M_inv[0, 1]) - b[0]
+    y_lin = (x * M_inv[1, 0] + y * M_inv[1, 1])
+
+    return x_lin, y_lin
+
+
+def volt_to_mcp(x, y):
+    """
+    Function to convert voltage coordinates to MCP coordinates
+    """
+    x_mcp = (x - 0.544) * 78.55
+    y_mcp = (y - 0.564) * 78.55
+
+    return x_mcp, y_mcp
 
 
 def compute_position(v1=None, v2=None, n_bins=401, bin_min=0, bin_max=4):
@@ -565,8 +617,16 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
             break
     # Rename the time column to TimeStamp
     df.rename(columns={time_col: 'TimeStamp'}, inplace=True)
+
+    # Convert the Date column from string to datetime in utc
+    try:
+        df['Date'] = pd.to_datetime(df['Date'], utc=True)
+    except Exception:
+        # Convert timestamp to datetime and set it to Date
+        df['Date'] = pd.to_datetime(df['TimeStamp'], unit='s', utc=True)
+
     # Set the index to the time column
-    df.set_index('TimeStamp', inplace=True)
+    df.set_index('Date', inplace=True)
     # Sort the dataframe by timestamp
     df = df.sort_index()
 
@@ -587,15 +647,6 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
     x, v1_shift, v3_shift = compute_position(v1=df['Channel1'], v2=df['Channel3'], n_bins=401,
                                              bin_min=0, bin_max=4)
 
-    # Add the x-coordinate to the dataframe
-    df_slice_sci.loc[:, 'x_val'] = x_slice
-    df_slice_sci.loc[:, 'v1_shift'] = v1_shift_slice
-    df_slice_sci.loc[:, 'v3_shift'] = v3_shift_slice
-
-    df.loc[:, 'x_val'] = x
-    df.loc[:, 'v1_shift'] = v1_shift
-    df.loc[:, 'v3_shift'] = v3_shift
-
     y_slice, v4_shift_slice, v2_shift_slice = compute_position(v1=df_slice_sci['Channel4'],
                                                                v2=df_slice_sci['Channel2'],
                                                                n_bins=401, bin_min=0, bin_max=4)
@@ -603,12 +654,43 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
     y, v4_shift, v2_shift = compute_position(v1=df['Channel4'], v2=df['Channel2'], n_bins=401,
                                              bin_min=0, bin_max=4)
 
+    # Correct for the non-linearity in the positions
+    x_lin_slice, y_lin_slice = lin_correction(x_slice, y_slice)
+    x_lin, y_lin = lin_correction(x, y)
+
+    # Get the x,y value in mcp units
+    x_mcp_slice, y_mcp_slice = volt_to_mcp(x_slice, y_slice)
+    x_mcp, y_mcp = volt_to_mcp(x, y)
+    x_mcp_lin_slice, y_mcp_lin_slice = volt_to_mcp(x_lin_slice, y_lin_slice)
+    x_mcp_lin, y_mcp_lin = volt_to_mcp(x_lin, y_lin)
+
+    # Add the x-coordinate to the dataframe
+    df_slice_sci.loc[:, 'x_val'] = x_slice
+    df_slice_sci.loc[:, 'x_val_lin'] = x_lin_slice
+    df_slice_sci.loc[:, 'x_mcp'] = x_mcp_slice
+    df_slice_sci.loc[:, 'x_mcp_lin'] = x_mcp_lin_slice
+    df_slice_sci.loc[:, 'v1_shift'] = v1_shift_slice
+    df_slice_sci.loc[:, 'v3_shift'] = v3_shift_slice
+
+    df.loc[:, 'x_val'] = x
+    df.loc[:, 'x_val_lin'] = x_lin
+    df.loc[:, 'x_mcp'] = x_mcp
+    df.loc[:, 'x_mcp_lin'] = x_mcp_lin
+    df.loc[:, 'v1_shift'] = v1_shift
+    df.loc[:, 'v3_shift'] = v3_shift
+
     # Add the y-coordinate to the dataframe
     df_slice_sci.loc[:, 'y_val'] = y_slice
+    df_slice_sci.loc[:, 'y_val_lin'] = y_lin_slice
+    df_slice_sci.loc[:, 'y_mcp'] = y_mcp_slice
+    df_slice_sci.loc[:, 'y_mcp_lin'] = y_mcp_lin_slice
     df_slice_sci.loc[:, 'v4_shift'] = v4_shift_slice
     df_slice_sci.loc[:, 'v2_shift'] = v2_shift_slice
 
     df.loc[:, 'y_val'] = y
+    df.loc[:, 'y_val_lin'] = y_lin
+    df.loc[:, 'y_mcp'] = y_mcp
+    df.loc[:, 'y_mcp_lin'] = y_mcp_lin
     df.loc[:, 'v4_shift'] = v4_shift
     df.loc[:, 'v2_shift'] = v2_shift
 
@@ -640,8 +722,16 @@ def read_csv_hk(file_val=None, t_start=None, t_end=None):
             break
     # Rename the time column to TimeStamp
     df.rename(columns={time_col: 'TimeStamp'}, inplace=True)
+
+    # Convert the Date column from string to datetime in utc
+    try:
+        df['Date'] = pd.to_datetime(df['Date'], utc=True)
+    except Exception:
+        # Convert timestamp to datetime and set it to Date
+        df['Date'] = pd.to_datetime(df['TimeStamp'], unit='s', utc=True)
+
     # Set the index to the time column
-    df.set_index('TimeStamp', inplace=True)
+    df.set_index('Date', inplace=True)
     # Sort the dataframe by timestamp
     df = df.sort_index()
 
@@ -701,8 +791,8 @@ def read_binary_file(file_val=None, t_start=None, t_end=None):
     )
 
     # Replace index with timestamp
-    df_hk.set_index('TimeStamp', inplace=True)
-    df_sci.set_index('TimeStamp', inplace=True)
+    df_hk.set_index('Date', inplace=True)
+    df_sci.set_index('Date', inplace=True)
 
     # Sort the dataframe by timestamp
     df_hk = df_hk.sort_index()
@@ -713,6 +803,16 @@ def read_binary_file(file_val=None, t_start=None, t_end=None):
     if t_end is None:
         t_end = df_sci.index.max()
 
+    df_sci, df_slice_sci = read_csv_sci(
+        file_val=file_name_sci, t_start=t_start, t_end=t_end)
+
+    df_hk, df_slice_hk = read_csv_hk(
+        file_val=file_name_hk, t_start=t_start, t_end=t_end)
+
+    # Select only those where "IsCommanded" is True
+    df_slice_sci = df_slice_sci[df_slice_sci['IsCommanded']==True]
+    df_sci = df_sci[df_sci['IsCommanded']==True]
+    """
     # Select dataframe from timestamp t_start to t_end
     df_slice_hk = df_hk.loc[t_start:t_end]
     df_slice_sci = df_sci.loc[t_start:t_end]
@@ -750,5 +850,6 @@ def read_binary_file(file_val=None, t_start=None, t_end=None):
     df_sci.loc[:, 'y_val'] = y
     df_sci.loc[:, 'v4_shift'] = v4_shift
     df_sci.loc[:, 'v2_shift'] = v2_shift
+    """
 
     return df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci

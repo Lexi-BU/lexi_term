@@ -1,4 +1,5 @@
 import importlib
+import datetime
 
 import matplotlib as mpl
 import matplotlib.gridspec as gridspec
@@ -158,6 +159,7 @@ class plot_data_class():
                  y_max=None,
                  density=None,
                  norm=None,
+                 unit=None,
                  ts_fig_height=None,
                  ts_fig_width=None,
                  hist_fig_height=None,
@@ -168,7 +170,10 @@ class plot_data_class():
                  v_max=None,
                  v_sum_min=None,
                  v_sum_max=None,
+                 cut_status_var=None,
                  crv_fit=None,
+                 lin_corr=None,
+                 cmap=None,
                  use_fig_size=None,
                  ):
         self.df_slice_hk = df_slice_hk
@@ -187,6 +192,7 @@ class plot_data_class():
         self.y_max = y_max
         self.density = density
         self.norm = norm
+        self.unit = unit
         self.ts_fig_height = ts_fig_height
         self.ts_fig_width = ts_fig_width
         self.hist_fig_height = hist_fig_height
@@ -197,7 +203,10 @@ class plot_data_class():
         self.v_max = v_max
         self.v_sum_min = v_sum_min
         self.v_sum_max = v_sum_max
+        self.cut_status_var = cut_status_var
         self.crv_fit = crv_fit
+        self.lin_corr = lin_corr
+        self.cmap = cmap
         self.use_fig_size = use_fig_size
 
     def ts_plots(self):
@@ -210,12 +219,12 @@ class plot_data_class():
         """
         # Try to convert the start_time and end_time to float or int
         try:
-            t_start = int(self.start_time)
+            t_start = datetime.datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S")
         except Exception:
             t_start = self.df_slice_hk.index.min()
             pass
         try:
-            t_end = int(self.end_time)
+            t_end = datetime.datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S")
         except Exception:
             t_end = self.df_slice_hk.index.max()
             pass
@@ -249,11 +258,13 @@ class plot_data_class():
         fig.subplots_adjust(left=0.25, right=0.99, top=0.99, bottom=0.25, wspace=0, hspace=0)
         gs = gridspec.GridSpec(1, 3, figure=fig, width_ratios=[1, 1, 1], height_ratios=[1])
 
-        x_axs_val = self.df_slice_hk.index - t_start
+        # Set the df_slice_hk to the time range specified by the user in the GUI and plot it
+        self.df_slice_hk = self.df_slice_hk.loc[t_start:t_end]
+        x_axs_val = (self.df_slice_hk.index - t_start).total_seconds()
         axs1 = plt.subplot(gs[:])
         axs1.plot(x_axs_val, self.df_slice_hk[self.plot_key], '.', color="darkred",
                   alpha=alpha, ms=ms, label=self.plot_key)
-        axs1.set_xlim(0, t_end - t_start)
+        axs1.set_xlim(np.nanmin(x_axs_val), np.nanmax(x_axs_val))
         # Rotate the x-axis labels by certain degrees and set their fontsize, if required
         plt.setp(axs1.get_xticklabels(), rotation=0)
         axs1.set_xlabel(f'Time since {t_start} (s)')
@@ -278,12 +289,12 @@ class plot_data_class():
 
         # Try to convert the start_time and end_time to float or int
         try:
-            t_start = int(self.start_time)
+            t_start = datetime.datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S")
         except Exception:
             t_start = self.df_slice_sci.index.min()
             pass
         try:
-            t_end = int(self.end_time)
+            t_end = datetime.datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S")
         except Exception:
             t_end = self.df_slice_sci.index.max()
             pass
@@ -336,7 +347,7 @@ class plot_data_class():
         except Exception:
             v_sum_max = 16
 
-        # Check if norm is an instance of mpl.colors.Normalize
+        # Check if norm is 'log' or 'linear'
         if (self.norm == 'log' or self.norm == 'linear'):
             norm = self.norm
         else:
@@ -347,12 +358,24 @@ class plot_data_class():
         elif norm == 'linear':
             norm = mpl.colors.Normalize(vmin=cmin, vmax=cmax)
 
+        # Check whether the axes units are 'volt' or 'mcp'
+        if (self.unit == 'volt' or self.unit == 'mcp'):
+            unit = self.unit
+        else:
+            unit = 'mcp'
+
+        # Check if cmap is an instance of mpl.colors.Colormap
+        if self.cmap in mpl.pyplot.colormaps():
+            self.cmap = self.cmap
+        else:
+            print(f"Invalid cmap: {self.cmap}. Using default cmap: 'viridis'")
+            self.cmap = 'viridis'
+
         x_range = [x_min, x_max]
         y_range = [y_min, y_max]
 
         # Remove rows with duplicate indices
         self.df_slice_sci = self.df_slice_sci[~self.df_slice_sci.index.duplicated(keep='first')]
-
         # Select data in the specified time range
         self.df_slice_sci = self.df_slice_sci.loc[t_start:t_end]
         # Exclude channel1 to channel4 data based on v_min and v_max
@@ -377,14 +400,14 @@ class plot_data_class():
         if self.use_fig_size:
             fig = plt.figure(num=None, figsize=(self.hist_fig_width, self.hist_fig_height),
                              facecolor='w', edgecolor='k')
+            fig.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0., hspace=0.)
         else:
-            fig = plt.figure(num=None, facecolor='w', edgecolor='k')
+            fig = plt.figure(num=None, facecolor='k', edgecolor='k')
 
-        fig.subplots_adjust(wspace=0., hspace=1)
-        gs = plt.GridSpec(6, 6)
-        axs1 = fig.add_subplot(gs[:-1, 1:], aspect=1)
-        y_hist = fig.add_subplot(gs[:-1, 0], sharey=axs1)
-        x_hist = fig.add_subplot(gs[-1, 1:], sharex=axs1)
+        # fig.subplots_adjust(wspace=0., hspace=0.1)
+        gs = plt.GridSpec(21, 21)
+
+        axs1 = fig.add_subplot(gs[:-3, 3:], aspect=1)
 
         # Drop all nans in the data
         self.df_slice_sci = self.df_slice_sci.dropna()
@@ -394,21 +417,54 @@ class plot_data_class():
         except Exception:
             pass
         # Plot the histogram on axs1
-        counts, xedges, yedges, im = axs1.hist2d(self.df_slice_sci["x_val"],
-                                                 self.df_slice_sci["y_val"], bins=bins,
-                                                 cmap='Spectral', norm=norm,
+        if self.lin_corr == False:
+            if self.unit =='volt':
+                x_key = "x_val"
+                y_key = "y_val"
+            elif self.unit == 'mcp':
+                x_key = "x_mcp"
+                y_key = "y_mcp"
+        elif self.lin_corr == True:
+            if self.unit =='volt':
+                x_key = "x_val_lin"
+                y_key = "y_val_lin"
+            elif self.unit == 'mcp':
+                x_key = "x_mcp_lin"
+                y_key = "y_mcp_lin"
+
+        print("\033[1;32m Plotting histogram with linearity correction set to "
+              f"{self.lin_corr} and axes units set to {self.unit}\033[0m")
+        counts, xedges, yedges, im = axs1.hist2d(self.df_slice_sci[x_key],
+                                                 self.df_slice_sci[y_key], bins=bins,
+                                                 cmap=self.cmap, norm=norm,
                                                  range=[x_range, y_range], cmin=cmin,
                                                  density=density)
-
+        # Add histogram data detauls to the global dictionary
+        if self.lin_corr == False:
+            global_variables.data_org["counts"] = counts
+            global_variables.data_org["xedges"] = xedges
+            global_variables.data_org["yedges"] = yedges
+        elif self.lin_corr == True:
+            # Add histogram data details to the global dictionary
+            global_variables.data_lin["counts"] = counts
+            global_variables.data_lin["xedges"] = xedges
+            global_variables.data_lin["yedges"] = yedges
         # Find the index of the maximum value in counts, ignoring NaNs
         max_index = np.unravel_index(np.nanargmax(counts, axis=None), counts.shape)
 
-        # Draw a horizontal adn vertical line at the maximum value
-        axs1.axvline(x=(xedges[max_index[0]] + xedges[max_index[0] + 1]) / 2, color='k',
-                     linestyle='--', linewidth=1)
-        axs1.axhline(y=(yedges[max_index[1]] + yedges[max_index[1] + 1]) / 2, color='k',
-                     linestyle='--', linewidth=1)
+        if self.cut_status_var == True:
+            # Draw a horizontal and vertical line at the maximum value
+            axs1.axvline(x=(xedges[max_index[0]] + xedges[max_index[0] + 1]) / 2, color='k',
+                         linestyle='--', linewidth=1, alpha=0.5)
+            axs1.axhline(y=(yedges[max_index[1]] + yedges[max_index[1] + 1]) / 2, color='k',
+                         linestyle='--', linewidth=1, alpha=0.5)
 
+        # Show the minor ticks on the x and y axes
+        axs1.minorticks_on()
+
+        # Set the grid on for both axes for major and minor ticks
+        axs1.grid(which='major', linestyle='--', linewidth='0.1', color='black', alpha=0.2)
+        # axs1.grid(which='minor', linestyle=':', linewidth='0.2', color='black')
         # Number of data points in each bin along the x- and y-axes
         yn = counts[max_index[0], :]
         xn = counts[:, max_index[1]]
@@ -416,16 +472,19 @@ class plot_data_class():
         x_step = (xedges[1:] + xedges[0:-1]) / 2
         y_step = (yedges[1:] + yedges[0:-1]) / 2
 
-        # Make step plot between xedges and xn
-        x_hist.step(x_step, xn, color='k', where='post')
-        x_hist.plot(xedges[1:], xn, 'ko', markerfacecolor='none', markeredgecolor='gray')
-
-        x_hist.set_xlabel('Vertical Cut')
-        # Make step plot between yedges and yn
-        y_hist.step(yn, y_step, color='k', where='post')
-        y_hist.plot(yn, yedges[:-1], 'ko', markerfacecolor='none', markeredgecolor='gray')
-        y_hist.invert_xaxis()
-        y_hist.set_xlabel('Horizontal Cut')
+        if self.cut_status_var == True:
+            y_hist = fig.add_subplot(gs[1:-4, 0:3], sharey=axs1)
+            x_hist = fig.add_subplot(gs[-3:-1, 3:], sharex=axs1)
+            # Make step plot between xedges and xn
+            x_hist.step(x_step, xn, color='k', where='post')
+            x_hist.plot(xedges[1:], xn, 'ko', markerfacecolor='none', markeredgecolor='gray')
+# 
+            x_hist.set_xlabel('Vertical Cut')
+            # Make step plot between yedges and yn
+            y_hist.step(yn, y_step, color='k', where='post')
+            y_hist.plot(yn, yedges[:-1], 'ko', markerfacecolor='none', markeredgecolor='gray')
+            y_hist.invert_xaxis()
+            y_hist.set_ylabel('Horizontal Cut')
 
         divider1 = make_axes_locatable(axs1)
         cax1 = divider1.append_axes("top", size="5%", pad=0.02)
@@ -444,16 +503,29 @@ class plot_data_class():
             cbar1.set_label('N', labelpad=0.0, rotation=0)
 
         # Put y-label and tickmarks on right side
-        axs1.yaxis.tick_right()
-        axs1.yaxis.set_label_position('right')
-        axs1.set_xlabel('Strip = V3/(V1+V3)')
-        axs1.set_ylabel('Wedge = V4/(V2+V4)')
+        if self.cut_status_var == True:
+            axs1.yaxis.tick_right()
+            axs1.yaxis.set_label_position('right')
+        else:
+            axs1.yaxis.tick_left()
+            axs1.yaxis.set_label_position('left')
+        if self.unit == 'volt':
+            x_label = 'Strip = V3/(V1+V3)'
+            y_label = 'Wedge = V4/(V2+V4)'
+        elif self.unit == 'mcp':
+            x_label = 'X (cm)'
+            y_label = 'Y (cm)'
+        axs1.set_xlabel(x_label)
+        axs1.set_ylabel(y_label)
         axs1.set_xlim(x_min, x_max)
         axs1.set_ylim(y_min, y_max)
         axs1.tick_params(axis="both", which="major")
+        # Show ticks on both sides of the plot
+        axs1.tick_params(axis='both', which='both', direction='in', left=True, right=True, top=True,
+                         bottom=True)
 
         # If curve fit option is chosen, fit a Gaussian to the data and plot it
-        if self.crv_fit:
+        if self.crv_fit and self.cut_status_var:
             try:
                 from scipy.optimize import curve_fit
                 x_vals = (xedges[max_index[0] - 10:max_index[0] + 10] +
@@ -500,10 +572,16 @@ class plot_data_class():
 
         # Set tight layout
         axs1.set_aspect('equal', anchor="C")
-        y_hist.set_aspect('auto', anchor="SW")
-        x_hist.set_aspect('auto', anchor="C")
+        if self.cut_status_var:
+            y_hist.set_aspect('auto', anchor="SW")
+            x_hist.set_aspect('auto', anchor="C")
 
+        # Save tge figure
+        fig_format = "png"
+        fig_name = f"../figures/lin_corr_{self.lin_corr}_unit_{self.unit}.{fig_format}"
+        plt.savefig(fig_name, dpi=300, bbox_inches='tight', format=fig_format, transparent=True)
         plt.close("all")
+
         # fig.tight_layout()
         return fig
 
@@ -517,12 +595,12 @@ class plot_data_class():
         """
         # Try to convert the start_time and end_time to float or int
         try:
-            t_start = int(self.start_time)
+            t_start = datetime.datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S")
         except Exception:
             t_start = self.df_slice_sci.index.min()
             pass
         try:
-            t_end = int(self.end_time)
+            t_end = datetime.datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S")
         except Exception:
             t_end = self.df_slice_sci.index.max()
             pass
@@ -563,13 +641,19 @@ class plot_data_class():
             norm = None
 
         # If density is true, set cmin to None
-        if density is True:
-            cmin = None
+        # if density is True:
+        #     cmin = None
 
         if norm == 'log':
             norm = mpl.colors.LogNorm(vmin=cmin, vmax=cmax)
         elif norm == 'linear':
             norm = mpl.colors.Normalize(vmin=cmin, vmax=cmax)
+
+        # Check if cmap is an instance of mpl.colors.Colormap
+        if self.cmap in mpl.pyplot.colormaps():
+            self.cmap = self.cmap
+        else:
+            self.cmap = 'viridis'
 
         self.df_slice_sci = self.df_slice_sci[~self.df_slice_sci.index.duplicated(keep='first')]
 
@@ -584,6 +668,9 @@ class plot_data_class():
                                                   (self.df_slice_sci["Channel4"] >= v_min) &
                                                   (self.df_slice_sci["Channel4"] <= v_max)]
 
+        # Select channel1 corresponding to the start_time and end_time
+        self.df_slice_sci = self.df_slice_sci[(self.df_slice_sci.index >= t_start) &
+                                              (self.df_slice_sci.index <= t_end)]
         v1 = self.df_slice_sci[self.channel1][
             (self.df_slice_sci.index >= t_start) & (self.df_slice_sci.index <= t_end)]
         v2 = self.df_slice_sci[self.channel2][
@@ -597,7 +684,7 @@ class plot_data_class():
 
         gs = gridspec.GridSpec(1, 1, height_ratios=[1], width_ratios=[1])
         axs1 = fig.add_subplot(gs[0, 0], aspect=1)
-        _, _, _, im = axs1.hist2d(v1, v2, bins=bins, cmap='Spectral', norm=norm,
+        _, _, _, im = axs1.hist2d(v1, v2, bins=bins, cmap=self.cmap, norm=norm,
                                   range=[x_range, y_range], cmin=cmin, density=density)
         divider1 = make_axes_locatable(axs1)
         cax1 = divider1.append_axes("top", size="5%", pad=0.01)

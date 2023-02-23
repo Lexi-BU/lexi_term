@@ -9,6 +9,7 @@ import lxi_gui_plot_routines as lgpr
 import lxi_load_plot_routines as llpr
 import lxi_misc_codes as lmsc
 import lxi_file_read_funcs as lxrf
+import lxi_gui_config as lgcf
 # import lxi_csv_to_cdf as lctc
 
 importlib.reload(lgpr)
@@ -17,6 +18,7 @@ importlib.reload(global_variables)
 importlib.reload(llpr)
 importlib.reload(lgeb)
 importlib.reload(lmsc)
+importlib.reload(lgcf)
 # importlib.reload(lctc)
 
 # Initialize the global variables. This is necessary because the global variables is where all the
@@ -24,23 +26,23 @@ importlib.reload(lmsc)
 global_variables.init()
 
 
-#def save_cdf():
-#    """
-#    The function, upon clicking the "Save CDF" button, saves the data in the csv file to a cdf file.
-#    """
-#    try:
-#        inputs = {
-#            "df": global_variables.all_file_details["df_all_sci"],
-#            "csv_file": global_variables.all_file_details["file_name_sci"],
-#        }
-#
-#        lctc.lxi_csv_to_cdf(**inputs)
-#    except Exception as e:
-#        print(f"\n \x1b[1;31;255m Error: \x1b[0m Could not save the cdf file. Following exception"
-#              f" was raised: \n \x1b[1;31;255m {e} \x1b[0m is not defined. \n Check if a valid "
-#              f"Science csv file is loaded. \n")
-#        pass
-#
+def save_cdf():
+    """
+    The function, upon clicking the "Save CDF" button, saves the data in the csv file to a cdf file.
+    """
+    try:
+        inputs = {
+            "df": global_variables.all_file_details["df_all_sci"],
+            "csv_file": global_variables.all_file_details["file_name_sci"],
+        }
+
+        lctc.lxi_csv_to_cdf(**inputs)
+    except Exception as e:
+        print(f"\n \x1b[1;31;255m Error: \x1b[0m Could not save the cdf file. Following exception"
+              f" was raised: \n \x1b[1;31;255m {e} \x1b[0m is not defined. \n Check if a valid "
+              f"Science csv file is loaded. \n")
+        pass
+
 
 def hist_plot_inputs(dpi=100):
     """
@@ -62,25 +64,26 @@ def hist_plot_inputs(dpi=100):
         "y_max": y_max_entry.get(),
         "density": density_status_var.get(),
         "norm": norm_type_var.get(),
+        "unit": unit_type_var.get(),
         "row_hist": 0,
         "col_hist": 2,
         "channel1": "Channel1",
         "channel2": "Channel2",
         "row_channel13": 0,
-        "column_channel13": 7,
+        "column_channel13": 11,
         "sticky_channel13": "nesw",
-        "row_span_channel13": 4,
-        "column_span_channel13": 4,
+        "row_span_channel13": 6,
+        "column_span_channel13": 3,
         "channel3": "Channel3",
         "channel4": "Channel4",
-        "row_channel24": 7,
-        "column_channel24": 7,
+        "row_channel24": 8,
+        "column_channel24": 11,
         "sticky_channel24": "nesw",
-        "row_span_channel24": 4,
-        "column_span_channel24": 4,
-        "hist_fig_height": screen_height / (2 * dpi),
-        "hist_fig_width": screen_width / (2 * dpi),
-        "hist_colspan": 2,
+        "row_span_channel24": 6,
+        "column_span_channel24": 3,
+        "hist_fig_height": screen_height / (2.2 * dpi),
+        "hist_fig_width": screen_width / (2.2 * dpi),
+        "hist_colspan": 7,
         "hist_rowspan": 20,
         "channel13_fig_height": screen_height / (3 * dpi),
         "channel13_fig_width": screen_width / (3 * dpi),
@@ -90,7 +93,10 @@ def hist_plot_inputs(dpi=100):
         "v_max": v_max_thresh_entry.get(),
         "v_sum_min": v_sum_min_thresh_entry.get(),
         "v_sum_max": v_sum_max_thresh_entry.get(),
+        "cut_status_var": cut_status_var.get(),
         "crv_fit": curve_fit_status_var.get(),
+        "lin_corr": lin_corr_status_var.get(),
+        'cmap': cmap_option.get(),
         "use_fig_size": True
     }
 
@@ -120,7 +126,7 @@ def ts_plot_inputs(plot_opt_entry=None, dpi=100, row=None, column=None, columnsp
     llpr.load_ts_plots(**inputs)
 
 
-def ts_button_val_change():
+def ts_button_val_change(default_opt_var):
     """
     This function is called when the "Default Options" button is clicked. It sets the values of all
     the 9 time series plot options to the default values.
@@ -384,109 +390,42 @@ plot_opt_entry_9.set("Select a column")
 ts_menu_9 = tk.OptionMenu(hk_tab, plot_opt_entry_9, *ts_options)
 ts_menu_9.grid(row=4, column=8, columnspan=1, sticky="w")
 
-# The minimum value of x-axis for histogram plot
-x_min_entry = lgeb.entry_box(root=sci_tab, row=0, column=4, entry_label="X-min", entry_val=0.35,
-                             font_style=font_style_box)
-
-# The maximum value of x-axis for histogram plot
-x_max_entry = lgeb.entry_box(root=sci_tab, row=1, column=4, entry_label="X-max", entry_val=0.62,
-                             font_style=font_style_box)
-
-# The minimum value of y-axis for histogram plot
-y_min_entry = lgeb.entry_box(root=sci_tab, row=2, column=4, entry_label="Y-min", entry_val=0.35,
-                             font_style=font_style_box)
-
-# The maximum value of y-axis for histogram plot
-y_max_entry = lgeb.entry_box(root=sci_tab, row=3, column=4, entry_label="Y-max", entry_val=0.62,
-                             font_style=font_style_box)
-
-# The number of bins for histogram plot
-hist_bins_entry = lgeb.entry_box(root=sci_tab, row=4, column=4, entry_label="Bins", entry_val=100,
-                                 font_style=font_style_box)
-
-# Mimimum number of data points in each bin for the histogram plot
-c_min_entry = lgeb.entry_box(root=sci_tab, row=5, column=4, entry_label="C Min", entry_val=1,
-                             font_style=font_style_box)
-
-# Maximum number of data points in each bin for the histogram plot
-c_max_entry = lgeb.entry_box(root=sci_tab, row=6, column=4, entry_label="C Max", entry_val="None",
-                             font_style=font_style_box)
-
-# Choose whether to plot probability density or the number of data points in each bin (is Bool)
-density_label = tk.Label(sci_tab, text="Density", font=font_style_box, bg="white")
-density_label.grid(row=7, column=5, columnspan=1, sticky="n")
-
-# Add a checkbox to choose whether to plot probability density or the number of data points in each
-# bin
-density_status_var = tk.BooleanVar()
-density_status_var.set(False)
-density_checkbox = tk.Checkbutton(sci_tab, text="", font=font_style_box,
-                                  variable=density_status_var, bg="white", fg="black")
-density_checkbox.grid(row=7, column=4, columnspan=1, sticky="n")
+(x_min_entry, x_max_entry, y_min_entry, y_max_entry, hist_bins_entry, c_min_entry, c_max_entry,
+ density_status_var, norm_type_var, unit_type_var, v_min_thresh_entry, v_max_thresh_entry,
+ v_sum_min_thresh_entry, v_sum_max_thresh_entry, cut_status_var, curve_fit_status_var,
+ lin_corr_status_var, cmap_option) = lgeb.populate_entries(root=sci_tab)
 
 # Redo the histogram plot if the status of the checkbox is changed
 density_status_var.trace("w", lambda *_: hist_plot_inputs(dpi=dpi))
 
-# Key for the norm of the colorbar
-norm_label = tk.Label(sci_tab, text="Norm", font=font_style_box, bg="white", fg="black")
-norm_label.grid(row=8, column=5, columnspan=1, sticky="n")
-
-# Add radio button for the norm type (default is 'log', other option is 'linear')
-norm_type_var = tk.StringVar()
-norm_type_var.set("log")
-norm_type_1 = tk.Radiobutton(sci_tab, text="Log", variable=norm_type_var, value="log", bg="white",
-                             fg="black")
-norm_type_1.grid(row=8, column=4, columnspan=1, sticky="new")
-
-norm_type_2 = tk.Radiobutton(sci_tab, text="Lin", variable=norm_type_var, value="linear",
-                             bg="white", fg="black")
-norm_type_2.grid(row=9, column=4, columnspan=1, sticky="new")
-
 # Redo the histogram plot when the norm type is changed
 norm_type_var.trace("w", lambda *_: hist_plot_inputs(dpi=dpi))
 
-# Minimum threshold for the voltage to be considered
-v_min_thresh_entry = lgeb.entry_box(root=sci_tab, row=10, column=4, entry_label="V Min",
-                                    entry_val=1.2, font_style=font_style_box)
+# Redo the histogram plot when the unit type is changed
+unit_type_var.trace("w", lambda *_: hist_plot_inputs(dpi=dpi))
 
-# Maximum threshold for the voltage to be considered
-v_max_thresh_entry = lgeb.entry_box(root=sci_tab, row=11, column=4, entry_label="V Max",
-                                    entry_val=4, font_style=font_style_box)
-
-# Sum of minimum and maximum threshold for the voltage to be considered
-v_sum_min_thresh_entry = lgeb.entry_box(root=sci_tab, row=12, column=4, entry_label="V sum Min",
-                                        entry_val=3, font_style=font_style_box)
-v_sum_max_thresh_entry = lgeb.entry_box(root=sci_tab, row=13, column=4, entry_label="V sum Max",
-                                        entry_val=8, font_style=font_style_box)
-
-# Choose whether to plot curve fit or not (is Bool)
-curve_fit_label = tk.Label(sci_tab, text="Curve Fit", font=font_style_box, bg="white", fg="black")
-curve_fit_label.grid(row=14, column=5, columnspan=1, sticky="n")
-
-# Add a checkbox to choose whether to plot curve fit or not
-curve_fit_status_var = tk.BooleanVar()
-curve_fit_status_var.set(False)
-curve_fit_checkbox = tk.Checkbutton(sci_tab, text="", font=font_style_box,
-                                    variable=curve_fit_status_var, bg="white", fg="black")
-curve_fit_checkbox.grid(row=14, column=4, columnspan=1, sticky="n")
+cut_status_var.trace("w", lambda *_: hist_plot_inputs(dpi=dpi))
 
 curve_fit_status_var.trace("w", lambda *_: hist_plot_inputs(dpi=dpi))
 
+lin_corr_status_var.trace("w", lambda *_: hist_plot_inputs(dpi=dpi))
+
 # Add a button to save the data to a cdf file
-#cdf_save_button = tk.Button(
-#    sci_tab, text="Save CDF", command=lambda: save_cdf(), font=font_style_box,
-#    justify="center", bg="snow", fg="green", pady=5, padx=5, borderwidth=2,
-#    relief="raised", highlightthickness=2, highlightbackground="green", highlightcolor="green"
-#)
-#cdf_save_button.grid(row=12, column=7, columnspan=2, sticky="n")
+cdf_save_button = tk.Button(
+    sci_tab, text="Save CDF", command=lambda: save_cdf(), font=font_style_box,
+    justify="center", bg="snow", fg="green", pady=5, padx=5, borderwidth=2,
+    relief="raised", highlightthickness=2, highlightbackground="green", highlightcolor="green"
+)
+cdf_save_button.grid(row=18, column=11, columnspan=1, sticky="nw")
 
 # Label for plot times
 start_time_label = tk.Label(sci_tab, text="Plot Times", font=font_style, bg="white", fg="black")
 start_time_label.grid(row=6, column=0, columnspan=2, sticky="nsew")
 
 # Add an input box with a label for start time
+default_time_dict = lgcf.get_config_time()
 start_time = tk.Entry(sci_tab, justify="center", bg="snow", fg="green", borderwidth=2)
-start_time.insert(0, "YYYY-MM-DD HH:MM:SS")
+start_time.insert(0, default_time_dict['start_time'])
 start_time.grid(row=7, column=0, columnspan=2, sticky="nsew")
 start_time_label = tk.Label(sci_tab, text="Start Time", font=font_style, bg="white", fg="black")
 start_time_label.grid(row=8, column=0, columnspan=2, sticky="nsew")
@@ -496,8 +435,9 @@ start_time_label.grid(row=8, column=0, columnspan=2, sticky="nsew")
 #                                                 entry_label="End Time", width=30,
 #                                                 entry_val="YYYY-MM-DD HH:MM:SS",
 #                                                 font_style=font_style)
+
 end_time = tk.Entry(sci_tab, justify="center", bg="snow", fg="green", borderwidth=2)
-end_time.insert(0, "YYYY-MM-DD HH:MM:SS")
+end_time.insert(0, default_time_dict['end_time'])
 end_time.grid(row=9, column=0, columnspan=2, sticky="nsew")
 end_time_label = tk.Label(sci_tab, text="End Time", font=font_style, bg="white", fg="black")
 end_time_label.grid(row=10, column=0, columnspan=2)
@@ -549,13 +489,42 @@ plot_button.grid(row=11, column=0, columnspan=1, rowspan=1, sticky="nsew", pady=
 plot_button.bind("<Button-1>", lambda event: lmsc.print_time_details(start_time=start_time.get(),
                                                                      end_time=end_time.get()))
 
+# If the plot button is pressed then all the histogram plots are redrawn
+refresh_button = tk.Button(sci_tab, text="Refresh Histogram", font=font_style_box, justify="center",
+                           command=lambda: hist_plot_inputs(dpi=dpi))
+
+refresh_button.grid(row=12, column=0, columnspan=1, rowspan=1, sticky="nsew", pady=5, padx=5)
+
+# If the plot button is pressed, then print the current time
+refresh_button.bind("<Button-1>", lambda event: lmsc.print_time_details(start_time=start_time.get(),
+                                                                        end_time=end_time.get()))
+
+# Add a button to save the configuration file
+entry_list = [x_min_entry, x_max_entry, y_min_entry, y_max_entry, hist_bins_entry, c_min_entry,
+              c_max_entry, density_status_var, norm_type_var, unit_type_var, v_min_thresh_entry,
+              v_max_thresh_entry, v_sum_min_thresh_entry, v_sum_max_thresh_entry, cut_status_var,
+              curve_fit_status_var, lin_corr_status_var, cmap_option, start_time, end_time]
+save_config_button = tk.Button(sci_tab, text="Save Config", font=font_style_box, justify="center",
+                               command=lambda: lgcf.save_config(entry_list=entry_list,
+                                                                entry_sec=["sci_plot_options",
+                                                                           "time_options"]))
+save_config_button.grid(row=13, column=0, columnspan=1, rowspan=1, sticky="nsew", pady=5, padx=5)
+
+# Add a default button to reset the configuration file
+default_config_button = tk.Button(sci_tab, text="Default Config", font=font_style_box,
+                                  justify="center",
+                                  command=lambda: lgcf.create_config_file(default_vals=True))
+default_config_button.grid(row=14, column=0, columnspan=1, rowspan=1, sticky="nsew", pady=5, padx=5)
+
+# Dsiable the default config button
+default_config_button.config(state="disabled")
+
 # Add a quit button
 quit_button_sci = tk.Button(
     sci_tab, text="Quit", command=root.destroy, font=font_style_box, justify="center", bg="snow",
     fg="red", pady=5, padx=5, borderwidth=2, relief="raised", highlightthickness=2,
-    highlightbackground="red", highlightcolor="red"
-)
-quit_button_sci.grid(row=12, column=0, columnspan=1, rowspan=1, sticky="n")
+    highlightbackground="red", highlightcolor="red")
+quit_button_sci.grid(row=18, column=12, columnspan=1, rowspan=1, sticky="ne")
 
 # Add a default option check box
 default_opt_var = tk.BooleanVar()
@@ -564,9 +533,7 @@ default_opt_checkbox = tk.Checkbutton(hk_tab, text="Default Options", font=font_
                                       variable=default_opt_var, bg="white", fg="black")
 default_opt_checkbox.grid(row=12, column=1, columnspan=1, sticky="n")
 
-default_opt_var.trace("w", lambda *_: ts_button_val_change())
-
-# If Default Checkbox is checked, then set the default options for the time series data
+default_opt_var.trace("w", lambda *_: ts_button_val_change(default_opt_var))
 
 # Add a refresh button to reload all the time series plots
 refresh_ts_hk_button = tk.Button(
@@ -581,16 +548,16 @@ quit_button_hk = tk.Button(
     fg="red", pady=5, padx=5, borderwidth=2, relief="raised", highlightthickness=2,
     highlightbackground="red", highlightcolor="red"
 )
-quit_button_hk.grid(row=12, column=4, columnspan=2, rowspan=1, sticky="n")
+quit_button_hk.grid(row=12, column=10, columnspan=2, rowspan=1, sticky="n")
 
 # blank_label = tk.Label(sci_tab, text="", font=font_style_box, bg="white")
 # for row in range(10):
 #     blank_label.grid(row=11 + row, column=0, columnspan=2, sticky="nsew")
-#     blank_label.grid(row=12 + row, column=4, columnspan=5, sticky="nsew")
+#     blank_label.grid(row=12 + row, column=opt_col_num, columnspan=5, sticky="nsew")
 
 # blank_label = tk.Label(sci_tab, text="", font=font_style_box, bg="white")
 # for row in range(10):
 #     blank_label.grid(row=11+row, column=0, columnspan=2, sticky="nsew")
-#     blank_label.grid(row=12+row, column=4, columnspan=5, sticky="nsew")
+#     blank_label.grid(row=12+row, column=opt_col_num, columnspan=5, sticky="nsew")
 
 root.mainloop()
