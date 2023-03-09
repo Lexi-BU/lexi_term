@@ -135,5 +135,5 @@ documents/
 .~lock.*
 
 # Ignore the data folder
-data/*
+# data/*
 figures/*

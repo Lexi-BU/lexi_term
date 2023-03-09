@@ -22,6 +22,7 @@ packet_format_hk = ">II4H"
 # double precision format for time stamp from pit
 packet_format_pit = "<d"
 
+
 sync_lxi = b'\xfe\x6b\x28\x40'
 sync_pit = b'\x54\x53'
 
@@ -59,6 +60,42 @@ class sci_packet(NamedTuple):
         structure = struct.unpack(packet_format_sci, bytes_[12:])
         return cls(
             Date=structure_time[0],
+            is_commanded=bool(structure[1] & 0x40000000),  # mask to test for commanded event type
+            timestamp=structure[1] & 0x3fffffff,           # mask for getting all timestamp bits
+            channel1=structure[2] * volts_per_count,
+            channel2=structure[3] * volts_per_count,
+            channel3=structure[4] * volts_per_count,
+            channel4=structure[5] * volts_per_count,
+        )
+
+
+class sci_packet_gsfc(NamedTuple):
+    """
+    Class for the science packet.
+    The code unpacks the science packet into a named tuple. Based on the packet format, each packet
+    is unpacked into following parameters:
+    - timestamp: int (32 bit)
+    - IsCommanded: bool (1 bit)
+    - voltage channel1: float (16 bit)
+    - voltage channel2: float (16 bit)
+    - voltage channel3: float (16 bit)
+    - voltage channel4: float (16 bit)
+
+    TimeStamp is the time stamp of the packet in seconds.
+    IsCommand tells you if the packet was commanded.
+    Voltages 1 to 4 are the voltages of corresponding different channels.
+    """
+    is_commanded: bool
+    timestamp: int
+    channel1: float
+    channel2: float
+    channel3: float
+    channel4: float
+
+    @classmethod
+    def from_bytes(cls, bytes_: bytes):
+        structure = struct.unpack(packet_format_sci, bytes_)
+        return cls(
             is_commanded=bool(structure[1] & 0x40000000),  # mask to test for commanded event type
             timestamp=structure[1] & 0x3fffffff,           # mask for getting all timestamp bits
             channel1=structure[2] * volts_per_count,
@@ -137,6 +174,70 @@ class hk_packet_cls(NamedTuple):
             )
 
 
+class hk_packet_cls_gsfc(NamedTuple):
+    """
+    Class for the housekeeping packet.
+    The code unpacks the HK packet into a named tuple. Based on the document and data structure,
+    each packet is unpacked into
+    - "timestamp",
+    - "hk_id" (this tells us what "hk_value" stores inside it),
+    - "hk_value",
+    - "delta_event_count",
+    - "delta_drop_event_count", and
+    - "delta_lost_event_count".
+
+    Based on the value of "hk_id", "hk_value" might correspond to value of following parameters:
+    NOTE: "hk_id" is a number, and varies from 0 to 15.
+    0: PinPuller Temperature
+    1: Optics Temperature
+    2: LEXI Base Temperature
+    3: HV Supply Temperature
+    4: Current Correspoding to the HV Supply (5.2V)
+    5: Current Correspoding to the HV Supply (10V)
+    6: Current Correspoding to the HV Supply (3.3V)
+    7: Anode Voltage Monitor
+    8: Current Correspoding to the HV Supply (28V)
+    9: ADC Ground
+    10: Command Count
+    11: Pin Puller Armmed
+    12: Unused
+    13: Unused
+    14: MCP HV after auto change
+    15: MCP HV after manual change
+    """
+    timestamp: int
+    hk_id: int
+    hk_value: float
+    delta_event_count: int
+    delta_drop_event_count: int
+    delta_lost_event_count: int
+
+    @classmethod
+    def from_bytes(cls, bytes_: bytes):
+        structure = struct.unpack(packet_format_hk, bytes_)
+        # Check if the present packet is the house-keeping packet. Only the house-keeping packets
+        # are processed.
+        if structure[1] & 0x80000000:
+            timestamp = structure[1] & 0x3fffffff  # mask for getting all timestamp bits
+            hk_id = (structure[2] & 0xf000) >> 12  # Down-shift 12 bits to get the hk_id
+            if hk_id == 10 or hk_id == 11:
+                hk_value = structure[2] & 0xfff
+            else:
+                hk_value = (structure[2] & 0xfff) << 4  # Up-shift 4 bits to get the hk_value
+            delta_event_count = structure[3]
+            delta_drop_event_count = structure[4]
+            delta_lost_event_count = structure[5]
+
+            return cls(
+                timestamp=timestamp,
+                hk_id=hk_id,
+                hk_value=hk_value,
+                delta_event_count=delta_event_count,
+                delta_drop_event_count=delta_drop_event_count,
+                delta_lost_event_count=delta_lost_event_count,
+            )
+
+
 def read_binary_data_sci(
     in_file_name=None,
     save_file_name="../data/processed/sci/output_sci.csv",
@@ -196,13 +297,24 @@ def read_binary_data_sci(
     index = 0
     packets = []
 
-    while index < len(raw) - 28:
-        if raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi:
-            packets.append(sci_packet.from_bytes(raw[index:index + 28]))
-            index += 28
-            continue
+    # Check if the word 'mcp' is present in the file name
+    if "mcp" in in_file_name:
+        while index < len(raw) - 16:
+            if raw[index:index + 4] == sync_lxi:
+                packets.append(sci_packet_gsfc.from_bytes(raw[index:index + 16]))
+                index += 16
+                continue
 
-        index += 1
+            index += 1
+
+    else:
+        while index < len(raw) - 28:
+            if raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi:
+                packets.append(sci_packet.from_bytes(raw[index:index + 28]))
+                index += 28
+                continue
+
+            index += 1
 
     # Split the file name in a folder and a file name
     output_file_name = in_file_name.split("/")[-1].split(".")[0] + "_sci_output.csv"
@@ -214,32 +326,64 @@ def read_binary_data_sci(
     if not Path(output_folder_name).exists():
         Path(output_folder_name).mkdir(parents=True, exist_ok=True)
 
-    with open(save_file_name, 'w', newline='') as file:
-        dict_writer = csv.DictWriter(
-            file,
-            fieldnames=(
-                'Date',
-                'TimeStamp',
-                'IsCommanded',
-                'Channel1',
-                'Channel2',
-                'Channel3',
-                'Channel4'
-            ),
-        )
-        dict_writer.writeheader()
-        dict_writer.writerows(
-            {
-                'Date': datetime.datetime.utcfromtimestamp(sci_packet.Date),
-                'TimeStamp': sci_packet.timestamp / 1e3,
-                'IsCommanded': sci_packet.is_commanded,
-                'Channel1': np.round(sci_packet.channel1, decimals=number_of_decimals),
-                'Channel2': np.round(sci_packet.channel2, decimals=number_of_decimals),
-                'Channel3': np.round(sci_packet.channel3, decimals=number_of_decimals),
-                'Channel4': np.round(sci_packet.channel4, decimals=number_of_decimals)
-            }
-            for sci_packet in packets
-        )
+    if "mcp" in in_file_name:
+        # Get the current datetime
+        now = datetime.datetime.now()
+        # Convert now to a float
+        now = now.timestamp()
+        with open(save_file_name, 'w', newline='') as file:
+            dict_writer = csv.DictWriter(
+                file,
+                fieldnames=(
+                    'Date',
+                    'TimeStamp',
+                    'IsCommanded',
+                    'Channel1',
+                    'Channel2',
+                    'Channel3',
+                    'Channel4'
+                ),
+            )
+            dict_writer.writeheader()
+            dict_writer.writerows(
+                {
+                    'Date': now,
+                    'TimeStamp': sci_packet.timestamp,
+                    'IsCommanded': sci_packet.is_commanded,
+                    'Channel1': np.round(sci_packet.channel1, decimals=number_of_decimals),
+                    'Channel2': np.round(sci_packet.channel2, decimals=number_of_decimals),
+                    'Channel3': np.round(sci_packet.channel3, decimals=number_of_decimals),
+                    'Channel4': np.round(sci_packet.channel4, decimals=number_of_decimals)
+                }
+                for sci_packet in packets
+            )
+    else:
+        with open(save_file_name, 'w', newline='') as file:
+            dict_writer = csv.DictWriter(
+                file,
+                fieldnames=(
+                    'Date',
+                    'TimeStamp',
+                    'IsCommanded',
+                    'Channel1',
+                    'Channel2',
+                    'Channel3',
+                    'Channel4'
+                ),
+            )
+            dict_writer.writeheader()
+            dict_writer.writerows(
+                {
+                    'Date': datetime.datetime.utcfromtimestamp(sci_packet.Date),
+                    'TimeStamp': sci_packet.timestamp / 1e3,
+                    'IsCommanded': sci_packet.is_commanded,
+                    'Channel1': np.round(sci_packet.channel1, decimals=number_of_decimals),
+                    'Channel2': np.round(sci_packet.channel2, decimals=number_of_decimals),
+                    'Channel3': np.round(sci_packet.channel3, decimals=number_of_decimals),
+                    'Channel4': np.round(sci_packet.channel4, decimals=number_of_decimals)
+                }
+                for sci_packet in packets
+            )
 
     # Read the saved file data in a dataframe
     df = pd.read_csv(save_file_name)
@@ -322,13 +466,22 @@ def read_binary_data_hk(
     index = 0
     packets = []
 
-    while index < len(raw) - 28:
-        if raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi:
-            packets.append(hk_packet_cls.from_bytes(raw[index:index + 28]))
-            index += 28
-            continue
+    if "mcp" in in_file_name:
+        while index < len(raw) - 16:
+            if raw[index:index + 4] == sync_lxi:
+                packets.append(hk_packet_cls_gsfc.from_bytes(raw[index:index + 16]))
+                index += 16
+                continue
 
-        index += 1
+            index += 1
+    else:
+        while index < len(raw) - 28:
+            if raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi:
+                packets.append(hk_packet_cls.from_bytes(raw[index:index + 28]))
+                index += 28
+                continue
+
+            index += 1
 
     # Get only those packets that have the HK data
     hk_idx = []
@@ -383,10 +536,17 @@ def read_binary_data_hk(
         )
         lxi_unit = 1
 
+    if "mcp" in input_file_name:
+        now = datetime.datetime.now()
+        # Convert now to a float
+        now = now.timestamp()
     for ii, idx in enumerate(hk_idx):
         hk_packet = packets[idx]
         # Convert to seconds from milliseconds for the timestamp
-        all_data_dict["Date"][ii] = hk_packet.Date
+        if "mc" in input_file_name:
+            all_data_dict["Date"][ii] = now
+        else:
+            all_data_dict["Date"][ii] = hk_packet.Date
         all_data_dict["TimeStamp"][ii] = hk_packet.timestamp / 1e3
         all_data_dict["HK_id"][ii] = hk_packet.hk_id
         key = str(hk_packet.hk_id)

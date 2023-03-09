@@ -2,6 +2,7 @@ import importlib
 
 import lxi_file_read_funcs as lxrf
 
+importlib.reload(lxrf)
 # Read a binary data file
 """
 # Science dataset
@@ -18,5 +19,9 @@ df_hk, save_file_name_hk = lxrf.read_binary_data_hk(
 """
 # Get the science and housekeeping dataframes with corrected positions and voltages
 df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci = lxrf.read_binary_file(
-    file_val='../data/20221114/payload_lexi_1706245848_39194.dat', t_start=None, t_end=None
-    )
+     file_val="../data/PIT/20221114/payload_lexi_1706245848_39194.dat", t_start=None, t_end=None
+     )
+
+# df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci = lxrf.read_binary_file(
+#     file_val="../data/GSFC/2022_04_21_1431_LEXI_HK_unit_1_mcp_unit_1_eBox_1987_hk_/2022_04_21_1431_LEXI_raw_LEXI_unit_1_mcp_unit_1_eBox-1987.txt", t_start=None, t_end=None
+#     )
