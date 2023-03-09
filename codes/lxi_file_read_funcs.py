@@ -329,8 +329,7 @@ def read_binary_data_sci(
     if "mcp" in in_file_name:
         # Get the current datetime
         now = datetime.datetime.now()
-        # Convert now to a float
-        now = now.timestamp()
+
         with open(save_file_name, 'w', newline='') as file:
             dict_writer = csv.DictWriter(
                 file,
@@ -596,7 +595,7 @@ def read_binary_data_hk(
         Path(output_folder_name).mkdir(parents=True, exist_ok=True)
 
     # Save the dataframe to a csv file
-    df.to_csv(save_file_name, index=True)
+    df.to_csv(save_file_name, index=False)
 
     return df, save_file_name
 
