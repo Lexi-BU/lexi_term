@@ -969,8 +969,8 @@ def read_binary_file(file_val=None, t_start=None, t_end=None):
         file_val=file_name_hk, t_start=t_start, t_end=t_end)
 
     # Select only those where "IsCommanded" is True
-    df_slice_sci = df_slice_sci[df_slice_sci['IsCommanded']==True]
-    df_sci = df_sci[df_sci['IsCommanded']==True]
+    df_slice_sci = df_slice_sci[df_slice_sci['IsCommanded']==False]
+    df_sci = df_sci[df_sci['IsCommanded']==False]
     """
     # Select dataframe from timestamp t_start to t_end
     df_slice_hk = df_hk.loc[t_start:t_end]
