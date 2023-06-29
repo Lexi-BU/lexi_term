@@ -15,8 +15,21 @@ importlib.reload(global_variables)
 global_variables.init()
 
 
-def load_ts_plots(root=None, df_slice_hk=None, plot_key=None, start_time=None, end_time=None, row=2,
-                  column=1, columnspan=2, rowspan=2, fig_width=None, fig_height=None):
+def load_ts_plots(
+    root=None,
+    df_slice_hk=None,
+    plot_key=None,
+    start_time=None,
+    end_time=None,
+    row=2,
+    column=1,
+    columnspan=2,
+    rowspan=2,
+    fig_width=None,
+    fig_height=None,
+    dark_mode=True,
+    time_type="LEXI",
+):
     """
     Loads the time series plots for the selected time range and displays them in the GUI.
 
@@ -42,33 +55,70 @@ def load_ts_plots(root=None, df_slice_hk=None, plot_key=None, start_time=None, e
         The width of the figure.
     fig_height : float
         The height of the figure.
+    dark_mode : bool
+        Whether or not the plots should be displayed in dark mode.
 
     Returns
     -------
     None
     """
     # Set the fontstyle to Times New Roman
-    font_mpl = {'family': 'serif', 'weight': 'normal'}
-    plt.rc('font', **font_mpl)
-    plt.rc('text', usetex=False)
+    font_mpl = {"family": "serif", "weight": "normal"}
+    plt.rc("font", **font_mpl)
+    plt.rc("text", usetex=False)
 
     frame = tk.Frame(root)
-    frame.grid(row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky='nsew')
+    frame.grid(
+        row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky="nsew"
+    )
 
-    fig_ts = lgpr.plot_data_class(df_slice_hk=df_slice_hk, plot_key=plot_key, start_time=start_time,
-                                  end_time=end_time, ts_fig_height=fig_height,
-                                  ts_fig_width=fig_width).ts_plots()
+    fig_ts = lgpr.plot_data_class(
+        df_slice_hk=df_slice_hk,
+        plot_key=plot_key,
+        start_time=start_time,
+        end_time=end_time,
+        ts_fig_height=fig_height,
+        ts_fig_width=fig_width,
+        dark_mode=dark_mode,
+        time_type=time_type,
+    ).ts_plots()
     canvas = FigureCanvasTkAgg(fig_ts, master=frame)
-    canvas.get_tk_widget().pack(side="left", fill='both', expand=False)
+    canvas.get_tk_widget().pack(side="left", fill="both", expand=False)
     canvas.draw()
 
 
-def load_hist_plots(root=None, df_slice_sci=None, start_time=None, end_time=None, bins=None,
-                    cmin=None, cmax=None, x_min=None, x_max=None, y_min=None, y_max=None,
-                    density=None, norm=None, unit=None, row=3, column=1, fig_width=5, fig_height=5,
-                    columnspan=2, rowspan=2, v_min=2.2, v_max=3.9, v_sum_min=3, v_sum_max=12,
-                    cut_status_var=False, crv_fit=False, lin_corr=False, cmap=None,
-                    use_fig_size=False):
+def load_hist_plots(
+    root=None,
+    df_slice_sci=None,
+    start_time=None,
+    end_time=None,
+    bins=None,
+    cmin=None,
+    cmax=None,
+    x_min=None,
+    x_max=None,
+    y_min=None,
+    y_max=None,
+    density=None,
+    norm=None,
+    unit=None,
+    row=3,
+    column=1,
+    fig_width=5,
+    fig_height=5,
+    columnspan=2,
+    rowspan=2,
+    v_min=2.2,
+    v_max=3.9,
+    v_sum_min=3,
+    v_sum_max=12,
+    cut_status_var=False,
+    crv_fit=False,
+    lin_corr=False,
+    cmap=None,
+    use_fig_size=False,
+    dark_mode=True,
+):
     """
     Loads the histogram plots for the selected time range and displays them in the GUI.
 
@@ -112,37 +162,98 @@ def load_hist_plots(root=None, df_slice_sci=None, start_time=None, end_time=None
         The number of columns the plots should span.
     rowspan : int
         The number of rows the plots should span.
+    v_min : float
+        The minimum value of the voltage axis.
+    v_max : float
+        The maximum value of the voltage axis.
+    v_sum_min : float
+        Minimum value of the sum of the voltages for thresholding.
+    v_sum_max : float
+        Maximum value of the sum of the voltages for thresholding.
+    cut_status_var : bool
+        Whether or not plot the vertical and horizontal lines for the cut status.
+    crv_fit : bool
+        If cut_status_var is True, whether or not to plot the curve fit for the cut status.
+    lin_corr : bool
+        Whether to plot the data without or with linear correlation.
+    cmap : str
+        The colormap to be used for the histogram. If None, the default colormap is used.
+    use_fig_size : bool
+        Whether or not to use the figure size specified in the GUI.
+    dark_mode : bool
+        Whether or not the plots should be displayed in dark mode.
 
     Returns
     -------
     None
     """
-    # Set the fontstyle to Times New Roman
-    font_mpl = {'family': 'serif', 'weight': 'normal'}
-    plt.rc('font', **font_mpl)
-    plt.rc('text', usetex=False)
 
-    fig_hist = lgpr.plot_data_class(df_slice_sci=df_slice_sci, start_time=start_time,
-                                    end_time=end_time, bins=bins, cmin=cmin, cmax=cmax,
-                                    x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max,
-                                    density=density, norm=norm, unit=unit, 
-                                    hist_fig_height=fig_height, hist_fig_width=fig_width,
-                                    v_min=v_min, v_max=v_max, v_sum_min=v_sum_min,
-                                    v_sum_max=v_sum_max, cut_status_var=cut_status_var,
-                                    crv_fit=crv_fit, lin_corr=lin_corr, cmap=cmap,
-                                    use_fig_size=use_fig_size).hist_plots()
+    # Set the fontstyle to Times New Roman
+    font_mpl = {"family": "serif", "weight": "normal"}
+    plt.rc("font", **font_mpl)
+    plt.rc("text", usetex=False)
+
+    fig_hist = lgpr.plot_data_class(
+        df_slice_sci=df_slice_sci,
+        start_time=start_time,
+        end_time=end_time,
+        bins=bins,
+        cmin=cmin,
+        cmax=cmax,
+        x_min=x_min,
+        x_max=x_max,
+        y_min=y_min,
+        y_max=y_max,
+        density=density,
+        norm=norm,
+        unit=unit,
+        hist_fig_height=fig_height,
+        hist_fig_width=fig_width,
+        v_min=v_min,
+        v_max=v_max,
+        v_sum_min=v_sum_min,
+        v_sum_max=v_sum_max,
+        cut_status_var=cut_status_var,
+        crv_fit=crv_fit,
+        lin_corr=lin_corr,
+        cmap=cmap,
+        use_fig_size=use_fig_size,
+        dark_mode=dark_mode,
+    ).hist_plots()
     frame = tk.Frame(root)
-    frame.grid(row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky='nsew')
+    frame.grid(
+        row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky="nsew"
+    )
     canvas = FigureCanvasTkAgg(fig_hist, master=frame)
-    canvas.get_tk_widget().pack(side="left", fill='both', expand=True)
+    canvas.get_tk_widget().pack(side="left", fill="both", expand=True)
     canvas.draw()
 
 
-def load_hist_plots_volt(root=None, df_slice_sci=None, start_time=None, end_time=None, bins=None,
-                         cmin=None, cmax=None, density=None, norm=None, unit=None, channel1=None,
-                         channel2=None, row=None, column=None, sticky=None, columnspan=None,
-                         rowspan=None, fig_width=None, fig_height=None, v_min=2.2, v_max=3.9,
-                         cmap=None):
+def load_hist_plots_volt(
+    root=None,
+    df_slice_sci=None,
+    start_time=None,
+    end_time=None,
+    bins=None,
+    cmin=None,
+    cmax=None,
+    density=None,
+    norm=None,
+    unit=None,
+    channel1=None,
+    channel2=None,
+    row=None,
+    column=None,
+    sticky=None,
+    columnspan=None,
+    rowspan=None,
+    fig_width=None,
+    fig_height=None,
+    v_min=2.2,
+    v_max=3.9,
+    cmap=None,
+    dark_mode=True,
+):
     """
     Loads the histogram plots for the selected time range and displays them in the GUI. This is for
     the voltage
@@ -179,35 +290,95 @@ def load_hist_plots_volt(root=None, df_slice_sci=None, start_time=None, end_time
     None
     """
     # Set the fontstyle to Times New Roman
-    font_mpl = {'family': 'serif', 'weight': 'normal'}
-    plt.rc('font', **font_mpl)
-    plt.rc('text', usetex=False)
+    font_mpl = {"family": "serif", "weight": "normal"}
+    plt.rc("font", **font_mpl)
+    plt.rc("text", usetex=False)
 
     fig_hist = lgpr.plot_data_class(
-        df_slice_sci=df_slice_sci, start_time=start_time, end_time=end_time, bins=bins, cmin=cmin,
-        cmax=cmax, density=density, norm=norm, unit=unit, channel1=channel1, channel2=channel2,
-        volt_fig_width=fig_width, volt_fig_height=fig_height, v_min=v_min, v_max=v_max, cmap=cmap
+        df_slice_sci=df_slice_sci,
+        start_time=start_time,
+        end_time=end_time,
+        bins=bins,
+        cmin=cmin,
+        cmax=cmax,
+        density=density,
+        norm=norm,
+        unit=unit,
+        channel1=channel1,
+        channel2=channel2,
+        volt_fig_width=fig_width,
+        volt_fig_height=fig_height,
+        v_min=v_min,
+        v_max=v_max,
+        cmap=cmap,
+        dark_mode=dark_mode,
     ).hist_plots_volt()
     fig_hist.tight_layout()
+    # frame = tk.Frame(root, bg="black")
+    # frame.grid(
+    #     row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky=sticky
+    # )
+    # canvas = FigureCanvasTkAgg(fig_hist, master=frame, bg="black")
+    # canvas.draw()
+    # canvas.get_tk_widget().pack(side="left", fill="both", expand=True)
+
     frame = tk.Frame(root)
     frame.grid(row=row, column=column, columnspan=columnspan, rowspan=rowspan, sticky=sticky)
+
     canvas = FigureCanvasTkAgg(fig_hist, master=frame)
     canvas.draw()
-    canvas.get_tk_widget().pack(side='left', fill='both', expand=True)
+    canvas.get_tk_widget().pack(side="left", fill="both", expand=True)
 
 
 def load_all_hist_plots(
-        root=None, df_slice_sci=None, start_time=None, end_time=None, bins=None, cmin=None,
-        cmax=None, x_min=None, x_max=None, y_min=None, y_max=None, density=None, norm=None,
-        unit=None, row_hist=3, col_hist=1, channel1=None, channel3=None, row_channel13=None,
-        column_channel13=None, sticky_channel13=None, row_span_channel13=None,
-        column_span_channel13=None, channel2=None, channel4=None, row_channel24=None,
-        column_channel24=None, sticky_channel24=None, row_span_channel24=None,
-        column_span_channel24=None, hist_fig_height=None, hist_fig_width=None, hist_colspan=None,
-        hist_rowspan=None, channel13_fig_height=None, channel13_fig_width=None,
-        channel24_fig_height=None, channel24_fig_width=None, v_min=None, v_max=None,
-        v_sum_min=None, v_sum_max=None, cut_status_var=None, crv_fit=None, lin_corr=None, cmap=None,
-        use_fig_size=False
+    root=None,
+    df_slice_sci=None,
+    start_time=None,
+    end_time=None,
+    bins=None,
+    cmin=None,
+    cmax=None,
+    x_min=None,
+    x_max=None,
+    y_min=None,
+    y_max=None,
+    density=None,
+    norm=None,
+    unit=None,
+    row_hist=3,
+    col_hist=1,
+    channel1=None,
+    channel3=None,
+    row_channel13=None,
+    column_channel13=None,
+    sticky_channel13=None,
+    row_span_channel13=None,
+    column_span_channel13=None,
+    channel2=None,
+    channel4=None,
+    row_channel24=None,
+    column_channel24=None,
+    sticky_channel24=None,
+    row_span_channel24=None,
+    column_span_channel24=None,
+    hist_fig_height=None,
+    hist_fig_width=None,
+    hist_colspan=None,
+    hist_rowspan=None,
+    channel13_fig_height=None,
+    channel13_fig_width=None,
+    channel24_fig_height=None,
+    channel24_fig_width=None,
+    v_min=None,
+    v_max=None,
+    v_sum_min=None,
+    v_sum_max=None,
+    cut_status_var=None,
+    crv_fit=None,
+    lin_corr=None,
+    cmap=None,
+    use_fig_size=False,
+    dark_mode=True,
 ):
     """
     Loads the histogram plots for the selected time range and displays them in the GUI. This is for
@@ -284,26 +455,85 @@ def load_all_hist_plots(
     -------
         None
     """
-    load_hist_plots(root=root[0], df_slice_sci=df_slice_sci, start_time=start_time,
-                    end_time=end_time, bins=bins, cmin=cmin, cmax=cmax, x_min=x_min, x_max=x_max,
-                    y_min=y_min, y_max=y_max, density=density, norm=norm, unit=unit, row=row_hist,
-                    column=col_hist, fig_height=hist_fig_height, fig_width=hist_fig_width,
-                    columnspan=hist_colspan, rowspan=hist_rowspan, v_min=v_min, v_max=v_max,
-                    v_sum_min=v_sum_min, v_sum_max=v_sum_max, cut_status_var=cut_status_var,
-                    crv_fit=crv_fit, lin_corr=lin_corr, cmap=cmap, use_fig_size=use_fig_size)
+    load_hist_plots(
+        root=root[0],
+        df_slice_sci=df_slice_sci,
+        start_time=start_time,
+        end_time=end_time,
+        bins=bins,
+        cmin=cmin,
+        cmax=cmax,
+        x_min=x_min,
+        x_max=x_max,
+        y_min=y_min,
+        y_max=y_max,
+        density=density,
+        norm=norm,
+        unit=unit,
+        row=row_hist,
+        column=col_hist,
+        fig_height=hist_fig_height,
+        fig_width=hist_fig_width,
+        columnspan=hist_colspan,
+        rowspan=hist_rowspan,
+        v_min=v_min,
+        v_max=v_max,
+        v_sum_min=v_sum_min,
+        v_sum_max=v_sum_max,
+        cut_status_var=cut_status_var,
+        crv_fit=crv_fit,
+        lin_corr=lin_corr,
+        cmap=cmap,
+        use_fig_size=use_fig_size,
+        dark_mode=dark_mode,
+    )
 
-    load_hist_plots_volt(root=root[1], df_slice_sci=df_slice_sci, start_time=start_time,
-                         end_time=end_time, bins=bins, cmin=cmin, cmax=cmax, density=density,
-                         norm=norm, channel1=channel1, channel2=channel3,
-                         row=row_channel13, column=column_channel13, sticky=sticky_channel13,
-                         rowspan=row_span_channel13, columnspan=column_span_channel13,
-                         fig_width=channel13_fig_width, fig_height=channel13_fig_height,
-                         v_min=v_min, v_max=v_max, cmap=cmap)
+    load_hist_plots_volt(
+        root=root[1],
+        df_slice_sci=df_slice_sci,
+        start_time=start_time,
+        end_time=end_time,
+        bins=bins,
+        cmin=cmin,
+        cmax=cmax,
+        density=density,
+        norm=norm,
+        channel1=channel1,
+        channel2=channel3,
+        row=row_channel13,
+        column=column_channel13,
+        sticky=sticky_channel13,
+        rowspan=row_span_channel13,
+        columnspan=column_span_channel13,
+        fig_width=channel13_fig_width,
+        fig_height=channel13_fig_height,
+        v_min=v_min,
+        v_max=v_max,
+        cmap=cmap,
+        dark_mode=dark_mode,
+    )
 
-    load_hist_plots_volt(root=root[1], df_slice_sci=df_slice_sci, start_time=start_time,
-                         end_time=end_time, bins=bins, cmin=cmin, cmax=cmax, density=density,
-                         norm=norm, channel1=channel2, channel2=channel4, row=row_channel24,
-                         column=column_channel24, sticky=sticky_channel24,
-                         rowspan=row_span_channel24, columnspan=column_span_channel24,
-                         fig_width=channel24_fig_width, fig_height=channel24_fig_height,
-                         v_min=v_min, v_max=v_max, cmap=cmap)
+    load_hist_plots_volt(
+        root=root[1],
+        df_slice_sci=df_slice_sci,
+        start_time=start_time,
+        end_time=end_time,
+        bins=bins,
+        cmin=cmin,
+        cmax=cmax,
+        density=density,
+        norm=norm,
+        channel1=channel2,
+        channel2=channel4,
+        row=row_channel24,
+        column=column_channel24,
+        sticky=sticky_channel24,
+        rowspan=row_span_channel24,
+        columnspan=column_span_channel24,
+        fig_width=channel24_fig_width,
+        fig_height=channel24_fig_height,
+        v_min=v_min,
+        v_max=v_max,
+        cmap=cmap,
+        dark_mode=dark_mode,
+    )
