@@ -55,8 +55,8 @@ def save_df_to_csv(file_name, df, threshold=False, v_min=1.2, v_max=3.4, v_sum_m
 # Read a binary data file
 # Get the science and housekeeping dataframes with corrected positions and voltages
 df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci = lxrf.read_binary_file(
-     file_val="../data/PIT/20221114/payload_lexi_1706245848_39194.dat", t_start=None, t_end=None
-     )
+    file_val="../data/PIT/20221114/payload_lexi_1706245848_39194.dat", t_start=None, t_end=None
+)
 
 # df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci = lxrf.read_binary_file(
 #     file_val="../data/GSFC/2022_04_21_1431_LEXI_HK_unit_1_mcp_unit_1_eBox_1987_hk_/"
