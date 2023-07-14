@@ -6,7 +6,8 @@ import subprocess
 import matplotlib.pyplot as plt
 
 import global_variables
-import lxi_csv_to_cdf as lctc
+
+# import lxi_csv_to_cdf as lctc
 import lxi_csv_to_csv as lctcsv
 import lxi_file_read_funcs as lxrf
 import lxi_gui_entry_box as lgeb
@@ -426,31 +427,30 @@ def save_csv():
         logger.error("No file loaded/ no Data in the file")
 
 
-def save_cdf():
-    """
-    The function, upon clicking the "Save CDF" button, saves the data in the csv file to a cdf file
-    in a folder named "cdf". The name of the cdf file is the same as the name of the input file,
-    with "cdf" appended to it.
-    """
-    if global_variables.all_file_details:
-        try:
-            inputs = {
-                "df": global_variables.all_file_details["df_all_sci"],
-                "csv_file": global_variables.all_file_details["file_name_sci"],
-            }
-            lctc.lxi_csv_to_cdf(**inputs)
-        except Exception as e:
-            print(
-                f"\n \x1b[1;31;255m Error: \x1b[0m Could not save the cdf file. Following exception"
-                f" was raised: \n \x1b[1;31;255m {e} \x1b[0m is not defined. \n Check if a valid "
-                f"Science csv file is loaded. \n"
-            )
-            pass
-    else:
-        logger.error("No file loaded/ no Data in the file")
-
+# def save_cdf():
+#     """
+#     The function, upon clicking the "Save CDF" button, saves the data in the csv file to a cdf file
+#     in a folder named "cdf". The name of the cdf file is the same as the name of the input file,
+#     with "cdf" appended to it.
+#     """
+#     if global_variables.all_file_details:
+#         try:
+#             inputs = {
+#                 "df": global_variables.all_file_details["df_all_sci"],
+#                 "csv_file": global_variables.all_file_details["file_name_sci"],
+#             }
+#             lctc.lxi_csv_to_cdf(**inputs)
+#         except Exception as e:
+#             print(
+#                 f"\n \x1b[1;31;255m Error: \x1b[0m Could not save the cdf file. Following exception"
+#                 f" was raised: \n \x1b[1;31;255m {e} \x1b[0m is not defined. \n Check if a valid "
+#                 f"Science csv file is loaded. \n"
+#             )
+#             pass
+#     else:
+#         logger.error("No file loaded/ no Data in the file")
+#
 def copy_pit_files():
-
     # Path to private key file on local machine
     # private_key_path = "C:\\Users\\Lexi-User\\.ssh\\id_rsa"
     private_key_path = "C:\\Users\\Lexi-User/.ssh/id_rsa"
@@ -501,7 +501,9 @@ def copy_recursively(sftp, remote_path, local_path):
     """
     Helper function to recursively copy files and folders from a remote path to a local path.
     """
-    print(f"Copying files from \x1b[1;31;255m{remote_path}\x1b[0m to \x1b[1;36;255m{local_path}\x1b[0m \n")
+    print(
+        f"Copying files from \x1b[1;31;255m{remote_path}\x1b[0m to \x1b[1;36;255m{local_path}\x1b[0m \n"
+    )
     try:
         # Create local directories if they don't exist
         os.makedirs(local_path, exist_ok=True)
@@ -521,20 +523,32 @@ def copy_recursively(sftp, remote_path, local_path):
                     if not os.path.exists(
                         local_file
                     ):  # Check if file already exists locally
-                        print(f"Copying file: \x1b[1;36;255m{file.filename}\x1b[0m from \x1b[1;31;255m PIT \x1b[0m\n")
+                        print(
+                            f"Copying file: \x1b[1;36;255m{file.filename}\x1b[0m from \x1b[1;31;255m PIT \x1b[0m\n"
+                        )
                         sftp.get(remote_file, local_file)
                         file_num += 1
         # Print the number of files copied
         if file_num == 0:
             print("\x1b[1;33;255m No new files to copy \x1b[0m\n")
         else:
-            print(f"A total of \x1b[1;31;255m {file_num} \x1b[0m files copied from \x1b[1;31;255m PIT \x1b[0m\n")
+            print(
+                f"A total of \x1b[1;31;255m {file_num} \x1b[0m files copied from \x1b[1;31;255m PIT \x1b[0m\n"
+            )
     except Exception as e:
         print("An error occurred during file transfer:", str(e))
 
 
-def add_circle(axs=None, radius=4, units="mcp", color=["r", "c"], fill=False, linewidth=2, zorder=10,
-               fontsize=12):
+def add_circle(
+    axs=None,
+    radius=4,
+    units="mcp",
+    color=["r", "c"],
+    fill=False,
+    linewidth=2,
+    zorder=10,
+    fontsize=12,
+):
     """
     The function adds a circle to the histogram plot.
 
@@ -576,8 +590,22 @@ def add_circle(axs=None, radius=4, units="mcp", color=["r", "c"], fill=False, li
             return axs
 
         # Add a circle centered at (0,0) with radius 4 cm
-        circle1 = plt.Circle((0, 0), radius1, color=color[0], fill=False, linewidth=linewidth, zorder=zorder)
-        circle2 = plt.Circle((0, 0), radius2, color=color[1], fill=False, linewidth=linewidth, zorder=zorder)
+        circle1 = plt.Circle(
+            (0, 0),
+            radius1,
+            color=color[0],
+            fill=False,
+            linewidth=linewidth,
+            zorder=zorder,
+        )
+        circle2 = plt.Circle(
+            (0, 0),
+            radius2,
+            color=color[1],
+            fill=False,
+            linewidth=linewidth,
+            zorder=zorder,
+        )
         # Make an arrow pointing to the edge of the circle from outside the circle at 45
         # degrees from the horizontal axis and with text "4.5 cm"
         angle_1 = np.pi / 2.7
@@ -607,4 +635,3 @@ def add_circle(axs=None, radius=4, units="mcp", color=["r", "c"], fill=False, li
         circle2.set_zorder(zorder)
 
     return axs
-
