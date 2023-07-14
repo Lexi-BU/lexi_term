@@ -37,7 +37,6 @@ packet_format_hk = ">II4H"
 # double precision format for time stamp from pit
 packet_format_pit = "<d"
 
-
 sync_lxi = b"\xfe\x6b\x28\x40"
 
 sync_pit = b"\x54\x53"
