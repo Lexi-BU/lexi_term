@@ -6,8 +6,16 @@ importlib.reload(lxrf)
 
 
 # Write a function that takes filename and dataframe as input and saves the dataframe to a csv file
-def save_df_to_csv(file_name, df, threshold=False, v_min=1.2, v_max=3.4, v_sum_min=5.0,
-                   v_sum_max=7, number_of_decimals=3):
+def save_df_to_csv(
+    file_name,
+    df,
+    threshold=False,
+    v_min=1.2,
+    v_max=3.4,
+    v_sum_min=5.0,
+    v_sum_max=7,
+    number_of_decimals=3,
+):
     """
     Save the dataframe to a csv file
 
@@ -35,17 +43,29 @@ def save_df_to_csv(file_name, df, threshold=False, v_min=1.2, v_max=3.4, v_sum_m
     None
 
     """
-    new_file_name = ".." + file_name.split('.')[2] + "_updated" + ".csv"
+    new_file_name = ".." + file_name.split(".")[2] + "_updated" + ".csv"
 
     print("Saving dataframe to file: ", new_file_name)
     if threshold:
         print("Applying threshold to the dataframe")
-        df = df[(df["Channel1"] >= v_min) & (df["Channel1"] <= v_max) &
-                (df["Channel2"] >= v_min) & (df["Channel2"] <= v_max) &
-                (df["Channel3"] >= v_min) & (df["Channel3"] <= v_max) &
-                (df["Channel4"] >= v_min) & (df["Channel4"] <= v_max) &
-                ((df["Channel1"] + df["Channel2"] + df["Channel3"] + df["Channel4"]) >= v_sum_min) &
-                ((df["Channel1"] + df["Channel2"] + df["Channel3"] + df["Channel4"]) <= v_sum_max)]
+        df = df[
+            (df["Channel1"] >= v_min)
+            & (df["Channel1"] <= v_max)
+            & (df["Channel2"] >= v_min)
+            & (df["Channel2"] <= v_max)
+            & (df["Channel3"] >= v_min)
+            & (df["Channel3"] <= v_max)
+            & (df["Channel4"] >= v_min)
+            & (df["Channel4"] <= v_max)
+            & (
+                (df["Channel1"] + df["Channel2"] + df["Channel3"] + df["Channel4"])
+                >= v_sum_min
+            )
+            & (
+                (df["Channel1"] + df["Channel2"] + df["Channel3"] + df["Channel4"])
+                <= v_sum_max
+            )
+        ]
 
     # Save the dataframe to a csv file rounded to 3 decimal places
     df.round(number_of_decimals).to_csv(new_file_name, index=True)
@@ -54,8 +74,17 @@ def save_df_to_csv(file_name, df, threshold=False, v_min=1.2, v_max=3.4, v_sum_m
 
 # Read a binary data file
 # Get the science and housekeeping dataframes with corrected positions and voltages
-df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci = lxrf.read_binary_file(
-    file_val="../data/PIT/20221114/payload_lexi_1706245848_39194.dat", t_start=None, t_end=None
+(
+    df_slice_hk,
+    file_name_hk,
+    df_slice_sci,
+    file_name_sci,
+    df_hk,
+    df_sci,
+) = lxrf.read_binary_file(
+    file_val="../data/PIT/20221114/payload_lexi_1706245848_39194.dat",
+    t_start=None,
+    t_end=None,
 )
 
 # df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci = lxrf.read_binary_file(
