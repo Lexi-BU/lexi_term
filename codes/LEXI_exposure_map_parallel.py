@@ -1,11 +1,10 @@
-# 2023 Jun 29 - BMW
-# Known issue!  the code only appears to work when there is evenly sized x and y axis...
-
 import numpy as np
 import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
 from matplotlib import ticker, cm
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool, cpu_count
 
 import time
 
@@ -38,6 +37,14 @@ def vignette(d):
     f = 1
 
     return f
+
+
+def calculate_exposure_delta(i):
+    r = np.sqrt((x_grid_arr - df.mp_ra[i]) ** 2 + (y_grid_arr - df.mp_dec[i]) ** 2)
+    exposure_delt = np.where(
+        (r < input_dict["LEXI_FOV"] * 0.5), vignette(r) * input_dict["step"], 0
+    )
+    return exposure_delt
 
 
 # Function to interpolate the pointing data to a given resolution
@@ -142,8 +149,8 @@ input_dict = {
     "save_df": True,  # If True, save the dataframe to a file.  Default is False
     "filename": "../data/LEXI_pointing_ephem_highres",  # Filename to save the dataframe to.  Default is '../data/LEXI_pointing_ephem_highres'
     "filetype": "pkl",  # Filetype to save the dataframe to.  Default is 'pkl'. Options are 'csv' or 'pkl'
-    "x_res": 0.05,  # x res in degrees. Ideal value is 0.1 deg
-    "y_res": 0.05,  # y res in degrees. Ideal value is 0.1 deg
+    "x_res": 1,  # x res in degrees. Ideal value is 0.1 deg
+    "y_res": 1,  # y res in degrees. Ideal value is 0.1 deg
     "LEXI_FOV": 9.1,  # LEXI FOV in degrees
     "roll": 0.0,  # deg roll angle.  Here 0 deg will correspond to line up perfectly with RA/DEC
     "xrange": [325.0, 365.0],  # desired input for plotting ranges in RA
@@ -158,7 +165,7 @@ try:
     df = pd.read_pickle(
         f"../data/LEXI_pointing_ephem_highres_res_{input_dict['res']}.pkl"
     )
-    print("High res pointing file loaded from file \n")
+    print("\n High res pointing file loaded from file \n")
 except FileNotFoundError:
     print("High res pointing file not found, computing now. This may take a while \n")
     ephem = pd.read_csv("SAMPLE_LEXI_pointing_ephem_edited.csv", sep=",")
@@ -196,7 +203,7 @@ stop_time = stop_time.replace(tzinfo=datetime.timezone.utc)
 try:
     # Read the exposure map from a pickle file
     exposure = np.load(
-        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}.npy"
+        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_parallel.npy"
     )
     print("Exposure map loaded from file \n")
 except FileNotFoundError:
@@ -229,21 +236,20 @@ except FileNotFoundError:
         f"Estimated time to run: \x1b[1;32;255m{np.round((end_time_loop - start_time_loop) * len(df) / 60, 1)} \x1b[0m minutes"
     )
     # Loop through each pointing step and add the exposure to the map
-    for i in range(len(df)):
-        r = np.sqrt(
-            (x_grid_arr - df.mp_ra[i]) ** 2 + (y_grid_arr - df.mp_dec[i]) ** 2
-        )  # Get distance in degrees to the pointing step
-        exposure_delt = np.where(
-            (r < input_dict["LEXI_FOV"] * 0.5), vignette(r) * input_dict["step"], 0
-        )  # Make an exposure delta for this span
-        exposure += exposure_delt  # Add the delta to the full map
-        # Print the progress in terminal in percentage complete without a new line for each one percent
-        # increase
-        print(
-            f"Computing exposure map ==> \x1b[1;32;255m {np.round(i/len(df)*100, 4)}\x1b[0m % complete",
-            end="\r",
-        )
-    # #return exposure
+    # Compute the max number of threads to use
+    # The number of cores to use
+    num_cores = (
+        5  # Limit to 20 cores or the number of available cores, whichever is smaller
+    )
+
+    # Create a Pool with the desired number of cores
+    with Pool(num_cores) as pool:
+        # Calculate exposure delta for each row in parallel
+        exposure_deltas = pool.map(calculate_exposure_delta, range(len(df)))
+
+    # Sum up the exposure deltas to get the final exposure array
+    for exposure_delta in exposure_deltas:
+        exposure += exposure_delta
 
     exposure = exposure / 10.0  # divide by 10 to convert from 100 ms steps to 1s steps
 
@@ -298,7 +304,7 @@ cax = fig.add_axes(
 plt.colorbar(im, cax=cax, label="Time in each pixel [s]")
 
 plt.savefig(
-    f"../figures/exposure_map_test_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}.pdf",
+    f"../figures/exposure_map_test_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_parallel_v2.pdf",
     dpi=300,
     bbox_inches="tight",
     pad_inches=0.1,
