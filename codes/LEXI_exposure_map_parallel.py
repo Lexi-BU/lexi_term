@@ -4,7 +4,7 @@ import datetime
 import matplotlib.pyplot as plt
 from matplotlib import ticker, cm
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Pool, cpu_count
+import multiprocessing as mp
 
 import time
 
@@ -39,11 +39,46 @@ def vignette(d):
     return f
 
 
-def calculate_exposure_delta(i):
-    r = np.sqrt((x_grid_arr - df.mp_ra[i]) ** 2 + (y_grid_arr - df.mp_dec[i]) ** 2)
-    exposure_delt = np.where(
-        (r < input_dict["LEXI_FOV"] * 0.5), vignette(r) * input_dict["step"], 0
-    )
+def calculate_exposure_delta(*args):
+    """
+    Function to calculate the exposure delta for a given pointing step
+
+    Parameters
+    ----------
+    args : tuple
+        Tuple of arguments to pass to the function
+        The arguments are:
+            i : int
+                Index of the pointing step
+            x_grid_arr : numpy array
+                Array of x values for the exposure map
+            y_grid_arr : numpy array
+                Array of y values for the exposure map
+            ra : float
+                RA of the pointing step
+            dec : float
+                DEC of the pointing step
+            LEXI_FOV : float
+                LEXI FOV in degrees
+            step : float
+                Step size in seconds
+
+    Returns
+    -------
+    exposure_delt : numpy array
+        Exposure delta array
+    """
+    i = args[0][0]
+    x_grid_arr = args[0][1]
+    y_grid_arr = args[0][2]
+    ra = args[0][3]
+    dec = args[0][4]
+    LEXI_FOV = args[0][5]
+    step = args[0][6]
+
+    # Calculate the distance from the pointing to each pixel
+    r = np.sqrt((x_grid_arr - ra) ** 2 + (y_grid_arr - dec) ** 2)
+    exposure_delt = np.where((r < LEXI_FOV * 0.5), vignette(r) * step, 0)
     return exposure_delt
 
 
@@ -149,8 +184,8 @@ input_dict = {
     "save_df": True,  # If True, save the dataframe to a file.  Default is False
     "filename": "../data/LEXI_pointing_ephem_highres",  # Filename to save the dataframe to.  Default is '../data/LEXI_pointing_ephem_highres'
     "filetype": "pkl",  # Filetype to save the dataframe to.  Default is 'pkl'. Options are 'csv' or 'pkl'
-    "x_res": 1,  # x res in degrees. Ideal value is 0.1 deg
-    "y_res": 1,  # y res in degrees. Ideal value is 0.1 deg
+    "x_res": 0.1,  # x res in degrees. Ideal value is 0.1 deg
+    "y_res": 0.1,  # y res in degrees. Ideal value is 0.1 deg
     "LEXI_FOV": 9.1,  # LEXI FOV in degrees
     "roll": 0.0,  # deg roll angle.  Here 0 deg will correspond to line up perfectly with RA/DEC
     "xrange": [325.0, 365.0],  # desired input for plotting ranges in RA
@@ -158,6 +193,7 @@ input_dict = {
     "x_offset": 0.0,  # deg angle from Az of mounting plate value to RA
     "y_offset": 9.1 / 2.0,  # deg angle from El of mounting plate value to DEC
     "step": 0.01,  # step size in seconds
+    "n_cores": 2,  # number of cores to use
 }
 
 # Try to read in the high res pointing file, if it doesn't exist then make it
@@ -223,29 +259,27 @@ except FileNotFoundError:
     exposure = np.zeros((len(x_grid), len(y_grid)))
     zero = np.zeros(exposure.shape)
 
-    # Check how long it takes to run a single step and based on that estimate how long it will take
-    # to run
-    start_time_loop = time.time()
-    r = np.sqrt((x_grid_arr - df.mp_ra[0]) ** 2 + (y_grid_arr - df.mp_dec[0]) ** 2)
-    exposure_delt = np.where(
-        (r < input_dict["LEXI_FOV"] * 0.5), vignette(r) * input_dict["step"], 0
-    )
-    exposure += exposure_delt
-    end_time_loop = time.time()
-    print(
-        f"Estimated time to run: \x1b[1;32;255m{np.round((end_time_loop - start_time_loop) * len(df) / 60, 1)} \x1b[0m minutes"
-    )
     # Loop through each pointing step and add the exposure to the map
     # Compute the max number of threads to use
     # The number of cores to use
-    num_cores = (
-        5  # Limit to 20 cores or the number of available cores, whichever is smaller
-    )
+    num_cores = input_dict["n_cores"]  # mp.cpu_count()
 
-    # Create a Pool with the desired number of cores
-    with Pool(num_cores) as pool:
-        # Calculate exposure delta for each row in parallel
-        exposure_deltas = pool.map(calculate_exposure_delta, range(len(df)))
+    p = mp.Pool(num_cores)
+    input = (
+        (
+            i,
+            x_grid_arr,
+            y_grid_arr,
+            df.mp_ra[i],
+            df.mp_dec[i],
+            input_dict["LEXI_FOV"],
+            input_dict["step"],
+        )
+        for i in range(len(df))
+    )
+    exposure_deltas = p.map(calculate_exposure_delta, input)
+    p.close()
+    p.join()
 
     # Sum up the exposure deltas to get the final exposure array
     for exposure_delta in exposure_deltas:
@@ -255,7 +289,7 @@ except FileNotFoundError:
 
     # Save the exposure map to a pickle file
     np.save(
-        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}.npy",
+        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_test.npy",
         exposure,
     )
 
