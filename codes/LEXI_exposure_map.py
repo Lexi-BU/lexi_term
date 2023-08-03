@@ -142,8 +142,8 @@ input_dict = {
     "save_df": True,  # If True, save the dataframe to a file.  Default is False
     "filename": "../data/LEXI_pointing_ephem_highres",  # Filename to save the dataframe to.  Default is '../data/LEXI_pointing_ephem_highres'
     "filetype": "pkl",  # Filetype to save the dataframe to.  Default is 'pkl'. Options are 'csv' or 'pkl'
-    "x_res": 0.05,  # x res in degrees. Ideal value is 0.1 deg
-    "y_res": 0.05,  # y res in degrees. Ideal value is 0.1 deg
+    "x_res": 0.01,  # x res in degrees. Ideal value is 0.1 deg
+    "y_res": 0.01,  # y res in degrees. Ideal value is 0.1 deg
     "LEXI_FOV": 9.1,  # LEXI FOV in degrees
     "roll": 0.0,  # deg roll angle.  Here 0 deg will correspond to line up perfectly with RA/DEC
     "xrange": [325.0, 365.0],  # desired input for plotting ranges in RA
@@ -196,7 +196,7 @@ stop_time = stop_time.replace(tzinfo=datetime.timezone.utc)
 try:
     # Read the exposure map from a pickle file
     exposure = np.load(
-        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}.npy"
+        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_tres_{input_dict['res']}.npy"
     )
     print("Exposure map loaded from file \n")
 except FileNotFoundError:
@@ -240,7 +240,7 @@ except FileNotFoundError:
         # Print the progress in terminal in percentage complete without a new line for each one percent
         # increase
         print(
-            f"Computing exposure map ==> \x1b[1;32;255m {np.round(i/len(df)*100, 4)}\x1b[0m % complete",
+            f"Computing exposure map ==> \x1b[1;32;255m {np.round(i/len(df)*100, 6)}\x1b[0m % complete",
             end="\r",
         )
     # #return exposure
@@ -249,7 +249,7 @@ except FileNotFoundError:
 
     # Save the exposure map to a pickle file
     np.save(
-        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}.npy",
+        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_tres_{input_dict['res']}.npy",
         exposure,
     )
 
@@ -298,7 +298,7 @@ cax = fig.add_axes(
 plt.colorbar(im, cax=cax, label="Time in each pixel [s]")
 
 plt.savefig(
-    f"../figures/exposure_map_test_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}.pdf",
+    f"../figures/exposure_map_test_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_tres_{input_dict['res']}.pdf",
     dpi=300,
     bbox_inches="tight",
     pad_inches=0.1,
