@@ -1,185 +1,34 @@
-import numpy as np
-import pandas as pd
 import datetime
-import matplotlib.pyplot as plt
-from matplotlib import ticker, cm
-from concurrent.futures import ThreadPoolExecutor
+import importlib
 import multiprocessing as mp
-
+import resource
 import time
 
+import LEXI_exposure_map_parallel_fnc as lepf
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib import cm
+from text_color_fnc import text_color as tc
+
+importlib.reload(lepf)
+
+tc = tc()
 
 # Set latex use to true
 plt.rc("text", usetex=True)
 plt.rc("font", family="serif")
 
-# --------------- Run things inside function ---------------
-# -------- input parts to run mask ----------------
 
+# Set the maximum amount of memory to 90% of available memory
+mem_limit = int(resource.getrlimit(resource.RLIMIT_AS)[1] * 1)
+resource.setrlimit(resource.RLIMIT_AS, (mem_limit, mem_limit))
 
-def vignette(d):
-    """
-    Function to calculate the vignetting factor for a given distance from boresight
-
-    Parameters
-    ----------
-    d : float
-        Distance from boresight in degrees
-
-    Returns
-    -------
-    f : float
-        Vignetting factor
-    """
-
-    # Set the vignetting factor
-    # f = 1.0 - 0.5 * (d / (LEXI_FOV * 0.5)) ** 2
-    f = 1
-
-    return f
-
-
-def calculate_exposure_delta(*args):
-    """
-    Function to calculate the exposure delta for a given pointing step
-
-    Parameters
-    ----------
-    args : tuple
-        Tuple of arguments to pass to the function
-        The arguments are:
-            i : int
-                Index of the pointing step
-            x_grid_arr : numpy array
-                Array of x values for the exposure map
-            y_grid_arr : numpy array
-                Array of y values for the exposure map
-            ra : float
-                RA of the pointing step
-            dec : float
-                DEC of the pointing step
-            LEXI_FOV : float
-                LEXI FOV in degrees
-            step : float
-                Step size in seconds
-
-    Returns
-    -------
-    exposure_delt : numpy array
-        Exposure delta array
-    """
-    i = args[0][0]
-    x_grid_arr = args[0][1]
-    y_grid_arr = args[0][2]
-    ra = args[0][3]
-    dec = args[0][4]
-    LEXI_FOV = args[0][5]
-    step = args[0][6]
-
-    # Calculate the distance from the pointing to each pixel
-    r = np.sqrt((x_grid_arr - ra) ** 2 + (y_grid_arr - dec) ** 2)
-    exposure_delt = np.where((r < LEXI_FOV * 0.5), vignette(r) * step, 0)
-    return exposure_delt
-
-
-# Function to interpolate the pointing data to a given resolution
-def interpolate_pointing(
-    df,
-    res="100L",
-    method="ffill",
-    save_df=False,
-    filename="../data/LEXI_pointing_ephem_highres",
-    filetype="pkl",
-):
-    """
-    Function to interpolate the pointing data to a given resolution
-
-    Parameters
-    ----------
-    df : pandas dataframe
-        Dataframe with pointing data
-    res : string
-        Resolution to interpolate to.  Default is 100 ms
-    method : string
-        Interpolation method.  Default is forward fill
-    save_df : bool
-        If True, save the dataframe to a file.  Default is False
-    filename : string
-        Filename to save the dataframe to.  Default is '../data/LEXI_pointing_ephem_highres'
-    filetype : string
-        Filetype to save the dataframe to.  Default is 'pkl'. Options are 'csv' or 'pkl'
-
-    Returns
-    -------
-    df : pandas dataframe
-        Dataframe with interpolated pointing data
-
-    Raises
-    ------
-    TypeError
-        If df is not a pandas dataframe
-    ValueError
-        If df is empty
-    TypeError
-        If res is not a string
-    TypeError
-        If index is not a datetime object
-    ValueError
-        If method is not 'ffill' or 'bfill'
-    TypeError
-        If filename is not a string
-    """
-
-    # Check if df is a pandas dataframe and is not empty
-    if not isinstance(df, pd.DataFrame):
-        raise TypeError("df must be a pandas dataframe")
-    if df.empty:
-        raise ValueError("df cannot be empty")
-    if not isinstance(res, str):
-        raise TypeError(
-            "res must be a string. Options are '100L' or '1S' or any other pandas"
-            "resample string"
-        )
-
-    # Check if the index is a datetime object
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise TypeError("index must be a datetime object")
-
-    if method not in ["ffill", "bfill"]:
-        raise ValueError("method must be 'ffill' or 'bfill'")
-
-    # Interpolate the even time steps to get 100 ms resolution
-    # Print that the interpolation is happening
-    print(
-        f"\nInterpolating the pointing data to {res} resolution. This may take a while\n"
-    )
-    df_intrp = df.resample(res).interpolate(method=method)
-
-    if save_df:
-        print(f"Trying to save dataframe to {filename}_res_{res}.{filetype}\n")
-        # Check if filename is given, if not then print saying that default will be used
-        if filename is None:
-            print(f"No filename given, default will be used: {filename}")
-        # Check if filename is a string
-        if not isinstance(filename, str):
-            raise TypeError("filename must be a string")
-
-        # Save the dataframe to proper file type
-        if filetype == "csv":
-            df_intrp.to_csv(f"{filename}_res_{res}.{filetype}", index=False)
-        elif filetype == "pkl":
-            df_intrp.to_pickle(f"{filename}_res_{res}.{filetype}")
-        else:
-            raise ValueError("filetype must be 'csv' or 'pkl'")
-        print(f"Dataframe saved to {filename}_res_{res}.{filetype}\n")
-
-    return df_intrp
-
-
+# Set the start time
 code_start_time = time.time()
 
 input_dict = {
-    "res": "100L",  # Time resolution to interpolate to.  Default is 100 ms
+    "t_res": "100L",  # Time resolution to interpolate to.  Default is 100 ms
     "method": "ffill",  # Interpolation method.  Default is forward fill
     "save_df": True,  # If True, save the dataframe to a file.  Default is False
     "filename": "../data/LEXI_pointing_ephem_highres",  # Filename to save the dataframe to.  Default is '../data/LEXI_pointing_ephem_highres'
@@ -193,17 +42,21 @@ input_dict = {
     "x_offset": 0.0,  # deg angle from Az of mounting plate value to RA
     "y_offset": 9.1 / 2.0,  # deg angle from El of mounting plate value to DEC
     "step": 0.01,  # step size in seconds
-    "n_cores": 2,  # number of cores to use
+    "n_cores": 1,  # number of cores to use
 }
 
 # Try to read in the high res pointing file, if it doesn't exist then make it
 try:
     df = pd.read_pickle(
-        f"../data/LEXI_pointing_ephem_highres_res_{input_dict['res']}.pkl"
+        f"../data/LEXI_pointing_ephem_highres_tres_{input_dict['t_res']}.pkl"
     )
-    print("\n High res pointing file loaded from file \n")
+    print(tc.green_text("\n High res pointing file loaded from file \n"))
 except FileNotFoundError:
-    print("High res pointing file not found, computing now. This may take a while \n")
+    print(
+        tc.red_text(
+            "High res pointing file not found, computing now. This may take a while \n"
+        )
+    )
     ephem = pd.read_csv("SAMPLE_LEXI_pointing_ephem_edited.csv", sep=",")
 
     # Set 'epoch_utc' column to datetime object, and set time to UTC
@@ -215,9 +68,9 @@ except FileNotFoundError:
     # Sort by time
     ephem = ephem.sort_index()
 
-    df = interpolate_pointing(
+    df = lepf.interpolate_pointing(
         ephem,
-        res=input_dict["res"],
+        t_res=input_dict["t_res"],
         method=input_dict["method"],
         save_df=input_dict["save_df"],
         filename=input_dict["filename"],
@@ -239,11 +92,13 @@ stop_time = stop_time.replace(tzinfo=datetime.timezone.utc)
 try:
     # Read the exposure map from a pickle file
     exposure = np.load(
-        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_parallel.npy"
+        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_tres_{input_dict['t_res']}_parallel_v_v.npy"
     )
-    print("Exposure map loaded from file \n")
+    print(tc.green_text("Exposure map loaded from file \n"))
 except FileNotFoundError:
-    print("Exposure map not found, computing now. This may take a while \n")
+    print(
+        tc.red_text("Exposure map not found, computing now. This may take a while \n")
+    )
     # Make array for exposure mask
     x_grid = np.arange(
         input_dict["xrange"][0], input_dict["xrange"][1], input_dict["x_res"]
@@ -264,7 +119,7 @@ except FileNotFoundError:
     # The number of cores to use
     num_cores = input_dict["n_cores"]  # mp.cpu_count()
 
-    p = mp.Pool(num_cores)
+    p = mp.Pool()
     input = (
         (
             i,
@@ -277,7 +132,7 @@ except FileNotFoundError:
         )
         for i in range(len(df))
     )
-    exposure_deltas = p.map(calculate_exposure_delta, input)
+    exposure_deltas = p.map(lepf.calculate_exposure_delta, input)
     p.close()
     p.join()
 
@@ -288,10 +143,13 @@ except FileNotFoundError:
     exposure = exposure / 10.0  # divide by 10 to convert from 100 ms steps to 1s steps
 
     # Save the exposure map to a pickle file
+    save_file = f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_tres_{input_dict['t_res']}_parallel_v_v.npy"
     np.save(
-        f"../data/exposure_map_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_test.npy",
+        save_file,
         exposure,
     )
+
+    print(f"Exposure map saved to file : {tc.green_text(save_file)} \n")
 
 max_exposure = np.nanmax(exposure)
 min_exposure = np.nanmin(exposure)
@@ -338,7 +196,7 @@ cax = fig.add_axes(
 plt.colorbar(im, cax=cax, label="Time in each pixel [s]")
 
 plt.savefig(
-    f"../figures/exposure_map_test_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_parallel_v2.pdf",
+    f"../figures/exposure_map_test_xres_{input_dict['x_res']}_yres_{input_dict['y_res']}_tres_{input_dict['t_res']}_parallel_v_v.pdf",
     dpi=300,
     bbox_inches="tight",
     pad_inches=0.1,
@@ -346,4 +204,6 @@ plt.savefig(
 # plt.show()
 
 code_end_time = time.time()
-print(f"Code took {np.round(code_end_time - code_start_time, 3)} seconds to run")
+print(
+    f"Code took {tc.red_text(np.round(code_end_time - code_start_time, 3))} seconds to run"
+)
