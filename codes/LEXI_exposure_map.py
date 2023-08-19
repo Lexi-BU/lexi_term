@@ -48,7 +48,7 @@ stop_time = stop_time.replace(tzinfo=datetime.timezone.utc)
 
 exposure = lemf.exposure_map(input_dict=input_dict, df=df, save_map=True)
 
-# Save the exposure map to a png file
+# Save the exposure map to a png/pdf file
 _ = lemf.matplotlib_figure(
     df=df,
     input_dict=input_dict,
@@ -60,7 +60,6 @@ _ = lemf.matplotlib_figure(
 )
 
 # Save the exposure map to an interactive html file
-
 _ = lemf.bokeh_figure(
     input_dict=input_dict,
     exposure=exposure,
