@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 import global_variables
 
-# import lxi_csv_to_cdf as lctc
+import lxi_csv_to_cdf as lctc
 import lxi_csv_to_csv as lctcsv
 import lxi_file_read_funcs as lxrf
 import lxi_gui_entry_box as lgeb

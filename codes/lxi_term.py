@@ -1,8 +1,15 @@
 import importlib
+from pathlib import Path
 
+import global_variables
 import lxi_file_read_funcs as lxrf
+import lxi_gui_plot_routines as lgpr
 
 importlib.reload(lxrf)
+importlib.reload(lgpr)
+importlib.reload(global_variables)
+
+global_variables.init()
 
 
 # Write a function that takes filename and dataframe as input and saves the dataframe to a csv file
@@ -43,7 +50,10 @@ def save_df_to_csv(
     None
 
     """
-    new_file_name = ".." + file_name.split(".")[2] + "_updated" + ".csv"
+    # Create a new file name
+    # Expand the file name to include the updated keyword
+    file_name = Path(file_name).expanduser()
+    new_file_name = file_name.parent / (file_name.stem + "_updated" + file_name.suffix)
 
     print("Saving dataframe to file: ", new_file_name)
     if threshold:
@@ -74,6 +84,8 @@ def save_df_to_csv(
 
 # Read a binary data file
 # Get the science and housekeeping dataframes with corrected positions and voltages
+
+file_val = "/home/cephadrius/Desktop/git/Lexi-BU/lexi_term/data/GSFC/2022_04_21_1431_LEXI_HK_unit_1_mcp_unit_1_eBox_1987_hk_/2022_04_21_1431_LEXI_raw_LEXI_unit_1_mcp_unit_1_eBox-1987.txt"
 (
     df_slice_hk,
     file_name_hk,
@@ -82,18 +94,47 @@ def save_df_to_csv(
     df_hk,
     df_sci,
 ) = lxrf.read_binary_file(
-    file_val="../data/PIT/20221114/payload_lexi_1706245848_39194.dat",
+    # file_val="../data/PIT/20221114/payload_lexi_1706245848_39194.dat",
+    file_val=file_val,
     t_start=None,
     t_end=None,
 )
 
-# df_slice_hk, file_name_hk, df_slice_sci, file_name_sci, df_hk, df_sci = lxrf.read_binary_file(
-#     file_val="../data/GSFC/2022_04_21_1431_LEXI_HK_unit_1_mcp_unit_1_eBox_1987_hk_/"
-#              "2022_04_21_1431_LEXI_raw_LEXI_unit_1_mcp_unit_1_eBox-1987.txt", t_start=None,
-#              t_end=None
-#     )
-
-
 # Save the science dataframe to a csv file
 save_df_to_csv(file_name_sci, df_sci, threshold=False)
 save_df_to_csv(file_name_hk, df_hk, threshold=False)
+
+# Get the figure name using the file_val
+fig_name = file_val.split("/")[-1].split(".")[0]
+
+# Plot the histogram of the science data
+
+fig_hist = lgpr.plot_data_class(
+    df_slice_sci=df_slice_sci,
+    # start_time=start_time,
+    # end_time=end_time,
+    bins=50,
+    cmin=0,
+    cmax=100,
+    x_min=-5,
+    x_max=5,
+    y_min=-5,
+    y_max=5,
+    density=False,
+    norm="linear",
+    unit="mcp",
+    hist_fig_height=10,
+    hist_fig_width=10,
+    v_min=0,
+    v_max=5,
+    v_sum_min=0,
+    v_sum_max=20,
+    cut_status_var=False,
+    crv_fit=False,
+    lin_corr=True,
+    non_lin_corr=True,
+    cmap="viridis",
+    # use_fig_size=use_fig_size,
+    dark_mode=False,
+    save_file_name=fig_name,
+).hist_plots()

@@ -13,6 +13,7 @@ import lxi_misc_codes as lmsc
 import numpy as np
 import pandas as pd
 import pytz
+import pickle
 
 importlib.reload(lmsc)
 
@@ -21,13 +22,15 @@ logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter("%(asctime)s:%(name)s:%(message)s")
 
+# Check if the log folder exists, if not then create it
+Path("../log").mkdir(parents=True, exist_ok=True)
+
 file_handler = logging.FileHandler("../log/lxi_file_read_funcs.log")
 file_handler.setFormatter(formatter)
 
 # stream_handler = logging.StreamHandler()
 
 logger.addHandler(file_handler)
-# logger.addHandler(stream_handler)
 
 # Tha packet format of the science and housekeeping packets
 packet_format_sci = ">II4H"
@@ -35,7 +38,8 @@ packet_format_sci = ">II4H"
 packet_format_hk = ">II4H"
 
 # double precision format for time stamp from pit
-packet_format_pit = "<d"
+packet_format_pit = ">d"
+
 
 sync_lxi = b"\xfe\x6b\x28\x40"
 
@@ -322,37 +326,41 @@ def read_binary_data_sci(
         os.path.getctime(input_file_name)
     )
 
-
     with open(input_file_name, "rb") as file:
         raw = file.read()
 
     index = 0
     packets = []
 
-    # Check if the word 'mcp' is present in the file name
-    if "mcp" in in_file_name:
-        while index < len(raw) - 16:
-            if raw[index:index + 4] == sync_lxi:
-                packets.append(sci_packet_cls_gsfc.from_bytes(raw[index:index + 16]))
-                index += 16
-                continue
-
-            index += 1
-    else:
+    # Check if the "file_name" has payload in its name or not. If it has payload in its name, then
+    # use the sci_packet_cls else use sci_packet_cls_gsfc
+    if "payload" in in_file_name:
         while index < len(raw) - 28:
             if (raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi):
                 packets.append(sci_packet_cls.from_bytes(raw[index:index + 28]))
                 index += 28
                 continue
             elif (raw[index:index + 2] == sync_pit) and (raw[index + 12:index + 16] != sync_lxi):
+                # Ignore the last packet
+                if index >= len(raw) - 28 - 16:
+                    # NOTE: This is a temporary fix. The last packet is ignored because the last
+                    # packet often isn't complete. Need to find a better solution. Check the function
+                    # read_binary_data_hk for the same.
+                    index += 28
+                    continue
                 # Check if sync_lxi is present in the next 16 bytes
-                if sync_lxi in raw[index + 12:index + 28]:
+                if sync_lxi in raw[index + 12:index + 28] and index + 28 < len(raw):
                     # Find the index of sync_lxi
                     index_sync = index + 12 + raw[index + 12:index + 28].index(sync_lxi)
                     # Reorder the packet
                     new_packet = (raw[index + 28:index + 12 + 28] +
                                   raw[index_sync:index + 28] +
                                   raw[index + 12 + 28:index_sync + 28])
+                    # Check if the packet length is 28
+                    if len(new_packet) != 28:
+                        # If the index + 28 is greater than the length of the raw data, then break
+                        if index + 28 > len(raw):
+                            break
                     packets.append(sci_packet_cls.from_bytes(new_packet))
                     index += 28
                     continue
@@ -386,6 +394,16 @@ def read_binary_data_sci(
                 index += 28
                 continue
             index += 28
+    else:
+        # Print in green color that the gsfc code is running
+        print("\033[92mRunning the GSFC code for Science.\033[0m")
+        while index < len(raw) - 16:
+            if raw[index:index + 4] == sync_lxi:
+                packets.append(sci_packet_cls_gsfc.from_bytes(raw[index:index + 16]))
+                index += 16
+                continue
+
+            index += 1
 
     # Split the file name in a folder and a file name
     # Format filenames and folder names for the different operating systems
@@ -408,10 +426,7 @@ def read_binary_data_sci(
     if not Path(output_folder_name).exists():
         Path(output_folder_name).mkdir(parents=True, exist_ok=True)
 
-    if "mcp" in in_file_name:
-        default_time = datetime.datetime(
-            2024, 1, 1, 0, 0, 0, tzinfo=pytz.timezone("UTC")
-        )
+    if "payload" in in_file_name:
         with open(save_file_name, "w", newline="") as file:
             dict_writer = csv.DictWriter(
                 file,
@@ -429,8 +444,8 @@ def read_binary_data_sci(
             try:
                 dict_writer.writerows(
                     {
-                        "Date": default_time + datetime.timedelta(milliseconds=sci_packet_cls.timestamp),
-                        "TimeStamp": sci_packet_cls.timestamp,
+                        "Date": datetime.datetime.utcfromtimestamp(sci_packet_cls.Date),
+                        "TimeStamp": sci_packet_cls.timestamp / 1e3,
                         "IsCommanded": sci_packet_cls.is_commanded,
                         "Channel1": np.round(
                             sci_packet_cls.channel1, decimals=number_of_decimals
@@ -454,6 +469,9 @@ def read_binary_data_sci(
                       f"is just \033[91m {len(packets)}\033[0m. \n \033[96m Check the datafile to "
                       "see if the datafile has proper data.\033[0m \n ")
     else:
+        default_time = datetime.datetime(
+            2024, 1, 1, 0, 0, 0, tzinfo=pytz.timezone("UTC")
+        )
         with open(save_file_name, "w", newline="") as file:
             dict_writer = csv.DictWriter(
                 file,
@@ -471,8 +489,8 @@ def read_binary_data_sci(
             try:
                 dict_writer.writerows(
                     {
-                        "Date": datetime.datetime.utcfromtimestamp(sci_packet_cls.Date),
-                        "TimeStamp": sci_packet_cls.timestamp / 1e3,
+                        "Date": default_time + datetime.timedelta(milliseconds=sci_packet_cls.timestamp),
+                        "TimeStamp": sci_packet_cls.timestamp,
                         "IsCommanded": sci_packet_cls.is_commanded,
                         "Channel1": np.round(
                             sci_packet_cls.channel1, decimals=number_of_decimals
@@ -585,6 +603,8 @@ def read_binary_data_hk(
 
     input_file_name = in_file_name
 
+    print(f"Reading the file \033[96m {in_file_name}\033[0m")
+
     # Get the creation date of the file in UTC and local time
     creation_date_utc = datetime.datetime.utcfromtimestamp(
         os.path.getctime(input_file_name)
@@ -599,14 +619,7 @@ def read_binary_data_hk(
     index = 0
     packets = []
 
-    if "mcp" in in_file_name:
-        while index < len(raw) - 16:
-            if raw[index:index + 4] == sync_lxi:
-                packets.append(hk_packet_cls_gsfc.from_bytes(raw[index:index + 16]))
-                index += 16
-                continue
-            index += 1
-    else:
+    if "payload" in in_file_name:
         while index < len(raw) - 28:
             if (raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] == sync_lxi):
                 # print(f"{index} d ==> {raw[index:index + 28].hex()}\n")
@@ -614,14 +627,29 @@ def read_binary_data_hk(
                 index += 28
                 continue
             elif (raw[index:index + 2] == sync_pit and raw[index + 12:index + 16] != sync_lxi):
+                # Ignore the last packet
+                if index >= len(raw) - 28 - 16:
+                    # NOTE: This is a temporary fix. The last packet is ignored because the last
+                    # packet often isn't complete. Need to find a better solution. Check the function
+                    # read_binary_data_sci for the same.
+                    index += 28
+                    continue
                 # Check if sync_lxi is present in the next 16 bytes
-                if sync_lxi in raw[index + 12:index + 28]:
+                if sync_lxi in raw[index + 12:index + 28] and index + 28 < len(raw):
                     # Find the index of sync_lxi
                     index_sync = index + 12 + raw[index + 12:index + 28].index(sync_lxi)
                     # Reorder the packet
                     new_packet = (raw[index:index + 12] +
                                   raw[index_sync:index + 28] +
                                   raw[index + 12 + 28:index_sync + 28])
+                    # Check if the packet length is 28
+                    if len(new_packet) != 28:
+                        # Print the packet length
+                        print(f"The packet length is {len(new_packet)}, index = {index} and length of raw is {len(raw)}")
+                        print(f"{index} 1 ==> {new_packet.hex()}\n")
+                        # If the index + 28 is greater than the length of the raw data, then break
+                        if index + 28 > len(raw):
+                            break
                     # print(f"{index} 1 ==> {new_packet.hex()}\n")
                     packets.append(hk_packet_cls.from_bytes(new_packet))
                     index += 28
@@ -659,7 +687,15 @@ def read_binary_data_hk(
                 index += 28
                 continue
             index += 28
-
+    else:
+        # Print in green color that the gsfc code is running
+        print("\033[92mRunning the GSFC code for Housekeeping.\033[0m")
+        while index < len(raw) - 16:
+            if raw[index:index + 4] == sync_lxi:
+                packets.append(hk_packet_cls_gsfc.from_bytes(raw[index:index + 16]))
+                index += 16
+                continue
+            index += 1
     # Get only those packets that have the HK data
     hk_idx = []
     for idx, hk_packet in enumerate(packets):
@@ -749,7 +785,9 @@ def read_binary_data_hk(
     for ii, idx in enumerate(hk_idx):
         hk_packet = packets[idx]
         # Convert to seconds from milliseconds for the timestamp
-        if "mcp" in input_file_name:
+        if "payload" in in_file_name:
+            all_data_dict["Date"][ii] = hk_packet.Date
+        else:
             default_time = datetime.datetime(
                 2024, 1, 1, 0, 0, 0, tzinfo=pytz.timezone("UTC")
             )
@@ -757,8 +795,6 @@ def read_binary_data_hk(
                 milliseconds=hk_packet.timestamp
             )
             all_data_dict["Date"][ii] = new_time.timestamp()
-        else:
-            all_data_dict["Date"][ii] = hk_packet.Date
         all_data_dict["TimeStamp"][ii] = hk_packet.timestamp / 1e3
         all_data_dict["HK_id"][ii] = hk_packet.hk_id
         key = str(hk_packet.hk_id)
@@ -874,7 +910,7 @@ def open_file_sci(start_time=None, end_time=None):
     # define a global variable for the file name
 
     file_val = filedialog.askopenfilename(
-        initialdir="../data/processed_data/sci/",
+        initialdir="../data/data/GSFC/2022_04_29_0900_LEXI_HK_unit1_mcp_unit1_eBox_1800V_hk_/",
         title="Select file",
         filetypes=(("csv files", "*.csv"), ("all files", "*.*")),
     )
@@ -1017,7 +1053,7 @@ def lin_correction(
     x,
     y,
     M_inv=np.array([[0.98678, 0.16204], [0.11385, 0.993497]]),
-    b=np.array([0.00195, 0.56355]),
+    b=np.array([0.00195, 0.0056355]),
 ):
     """
     Function to apply nonlinearity correction to MCP position x/y data
@@ -1029,6 +1065,50 @@ def lin_correction(
     return x_lin, y_lin
 
 
+def non_lin_correction(
+        x,
+        y,
+):
+    """
+    Function to apply nonlinearity correction to MCP position x/y data. The model to apply the
+    nonlinearity correction is a Gaussian Process model trained on the data from the LEXI mask
+    testing. The kernel used is Matern with length scale = 5 and nu = 2.5.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        x position data.
+    y : numpy.ndarray
+        y position data.
+
+    Returns
+    -------
+    x_nln : numpy.ndarray
+        x position data after applying nonlinearity correction.
+    y_nln : numpy.ndarray
+        y position data after applying nonlinearity correction.
+    """
+    gp_model_file_name = (
+        "../data/gp_models/gp_data_3.0_10_0.0_0.8_4_Matern(length_scale=5, nu=2.5).pickle"
+    )
+
+    # Get the gp_model from the pickle file
+    with open(gp_model_file_name, "rb") as f:
+        gp_model = pickle.load(f)
+
+    # Close the pickle file
+    f.close()
+
+    xy_coord = np.array([x, y]).T
+    delta_xy, sigma = gp_model.predict(xy_coord, return_std=True)
+
+    corrected_xy = xy_coord - delta_xy
+    x_nln = corrected_xy[:, 0]
+    y_nln = corrected_xy[:, 1]
+
+    return x_nln, y_nln
+
+
 def volt_to_mcp(x, y):
     """
     Function to convert voltage coordinates to MCP coordinates
@@ -1037,6 +1117,7 @@ def volt_to_mcp(x, y):
     y_mcp = (y - 0.564) * 78.55
 
     return x_mcp, y_mcp
+
 
 def volt_to_deg(x, y):
     """
@@ -1105,7 +1186,8 @@ def compute_position(v1=None, v2=None, n_bins=401, bin_min=0, bin_max=4):
     v1_shift = v1 - n1_z
     v2_shift = v2 - n2_z
 
-    particle_pos = v2_shift / (v2_shift + v1_shift)
+    # particle_pos = v2_shift / (v2_shift + v1_shift)
+    particle_pos = v2 / (v2 + v1)
 
     return particle_pos, v1_shift, v2_shift
 
@@ -1194,7 +1276,7 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
         v1=df["Channel4"], v2=df["Channel2"], n_bins=401, bin_min=0, bin_max=4
     )
 
-    # Correct for the non-linearity in the positions
+    # Correct for the non-linearity in the positions using lineat correction model
     x_lin_slice, y_lin_slice = lin_correction(x_slice, y_slice)
     x_lin, y_lin = lin_correction(x, y)
 
@@ -1203,6 +1285,23 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
     x_mcp, y_mcp = volt_to_mcp(x, y)
     x_mcp_lin_slice, y_mcp_lin_slice = volt_to_mcp(x_lin_slice, y_lin_slice)
     x_mcp_lin, y_mcp_lin = volt_to_mcp(x_lin, y_lin)
+
+    # Correct for the non-linearity in the positions using non-linear correction model
+    # NOTE: The non-linear correction is only applied on the mcp coordinates after linear correction
+    # has been applied.
+    try:
+        x_mcp_nln_slice, y_mcp_nln_slice = non_lin_correction(x_mcp_lin_slice, y_mcp_lin_slice)
+    except Exception:
+        # Set theem to NaNs of the same length as x_mcp_slice
+        x_mcp_nln_slice = np.full(len(x_mcp_lin_slice), np.nan)
+        y_mcp_nln_slice = np.full(len(y_mcp_lin_slice), np.nan)
+
+    try:
+        x_mcp_nln, y_mcp_nln = non_lin_correction(x_mcp_lin, y_mcp_lin)
+    except Exception:
+        # Set them to NaNs of the same length as x_mcp
+        x_mcp_nln = np.full(len(x_mcp_lin), np.nan)
+        y_mcp_nln = np.full(len(y_mcp_lin), np.nan)
 
     # Get the x,y value in deg units
     x_deg_slice, y_deg_slice = volt_to_deg(x_mcp_slice, y_mcp_slice)
@@ -1215,6 +1314,7 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
     df_slice_sci.loc[:, "x_val_lin"] = x_lin_slice
     df_slice_sci.loc[:, "x_mcp"] = x_mcp_slice
     df_slice_sci.loc[:, "x_mcp_lin"] = x_mcp_lin_slice
+    df_slice_sci.loc[:, "x_mcp_nln"] = x_mcp_nln_slice
     df_slice_sci.loc[:, "x_deg"] = x_deg_slice
     df_slice_sci.loc[:, "x_deg_lin"] = x_deg_lin_slice
     df_slice_sci.loc[:, "v1_shift"] = v1_shift_slice
@@ -1224,6 +1324,7 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
     df.loc[:, "x_val_lin"] = x_lin
     df.loc[:, "x_mcp"] = x_mcp
     df.loc[:, "x_mcp_lin"] = x_mcp_lin
+    df.loc[:, "x_mcp_nln"] = x_mcp_nln
     df.loc[:, "x_deg"] = x_deg
     df.loc[:, "x_deg_lin"] = x_deg_lin
     df.loc[:, "v1_shift"] = v1_shift
@@ -1234,6 +1335,7 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
     df_slice_sci.loc[:, "y_val_lin"] = y_lin_slice
     df_slice_sci.loc[:, "y_mcp"] = y_mcp_slice
     df_slice_sci.loc[:, "y_mcp_lin"] = y_mcp_lin_slice
+    df_slice_sci.loc[:, "y_mcp_nln"] = y_mcp_nln_slice
     df_slice_sci.loc[:, "y_deg"] = y_deg_slice
     df_slice_sci.loc[:, "y_deg_lin"] = y_deg_lin_slice
     df_slice_sci.loc[:, "v4_shift"] = v4_shift_slice
@@ -1243,6 +1345,7 @@ def read_csv_sci(file_val=None, t_start=None, t_end=None):
     df.loc[:, "y_val_lin"] = y_lin
     df.loc[:, "y_mcp"] = y_mcp
     df.loc[:, "y_mcp_lin"] = y_mcp_lin
+    df.loc[:, "y_mcp_nln"] = y_mcp_nln
     df.loc[:, "y_deg"] = y_deg
     df.loc[:, "y_deg_lin"] = y_deg_lin
     df.loc[:, "v4_shift"] = v4_shift
@@ -1542,6 +1645,20 @@ def read_binary_file(file_val=None, t_start=None, t_end=None, multiple_files=Fal
     df_slice_sci = df_slice_sci[df_slice_sci["IsCommanded"] == False]
     df_sci = df_sci[df_sci["IsCommanded"] == False]
 
+    # Select only rows where all channels are greater than 0
+    df_slice_sci = df_slice_sci[
+        (df_slice_sci["Channel1"] > 0)
+        & (df_slice_sci["Channel2"] > 0)
+        & (df_slice_sci["Channel3"] > 0)
+        & (df_slice_sci["Channel4"] > 0)
+    ]
+    df_sci = df_sci[
+        (df_sci["Channel1"] > 0)
+        & (df_sci["Channel2"] > 0)
+        & (df_sci["Channel3"] > 0)
+        & (df_sci["Channel4"] > 0)
+    ]
+    
     # Select dataframe from timestamp t_start to t_end
     df_slice_hk = df_hk.loc[t_start:t_end].copy()
     df_slice_sci = df_sci.loc[t_start:t_end].copy()
